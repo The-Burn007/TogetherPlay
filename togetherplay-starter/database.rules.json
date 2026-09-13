@@ -1,0 +1,32 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "presence": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        "$connectionId": {
+          ".validate": "newData.hasChildren(['state', 'lastSeen'])"
+        }
+      }
+    },
+
+    "gameState": {
+      "$gameId": {
+        ".read": "auth != null && root.child('gameState').child($gameId).child('players').child(auth.uid).exists()",
+        ".write": false
+      }
+    },
+
+    "signaling": {
+      "$gameId": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid && root.child('gameState').child($gameId).child('players').child(auth.uid).exists()",
+          ".write": "auth != null && auth.uid === $uid && root.child('gameState').child($gameId).child('players').child(auth.uid).exists()"
+        }
+      }
+    }
+  }
+}

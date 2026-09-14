@@ -1,0 +1,6 @@
+{
+  "name": "TogetherPlay",
+  "description": "Multiplayer relationship game room for couples living apart.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,18 @@
+{
+  "rules": {
+    "gameStates": {
+      "$gameId": {
+        ".read": "auth != null",
+        ".write": false
+      }
+    },
+    "presence": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    ".read": false,
+    ".write": false
+  }
+}

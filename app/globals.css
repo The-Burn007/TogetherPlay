@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+@theme {
+  /* Surfaces & Canvas */
+  --color-surface-deep: #0e0d10;
+  --color-surface: #141316;
+  --color-surface-raised: #1a191d;
+  --color-surface-container: #212025;
+  --color-surface-overlay: #27252c;
+  --color-surface-container-high: #2d2b33;
+  --color-surface-container-highest: #37353e;
+  --color-surface-float: #32303a;
+
+  /* Primary Entities: Player 1 (Ember) & Player 2 (Sage) */
+  --color-player-one-ember: #e05638;
+  --color-player-one-ember-hover: #eb674b;
+  --color-player-one-ember-subtle: rgba(224, 86, 56, 0.12);
+  --color-player-one-ember-glow: rgba(224, 86, 56, 0.28);
+  --color-player-one-ember-text: #f28b66;
+
+  --color-player-two-sage: #4e7c69;
+  --color-player-two-sage-hover: #5b8e7a;
+  --color-player-two-sage-subtle: rgba(78, 124, 105, 0.14);
+  --color-player-two-sage-glow: rgba(78, 124, 105, 0.28);
+  --color-player-two-sage-text: #7ca897;
+
+  /* Connection Entity: Shared Resonance (Amber) */
+  --color-shared-amber: #d99b38;
+  --color-shared-amber-hover: #e6a847;
+  --color-shared-amber-subtle: rgba(217, 155, 56, 0.12);
+  --color-shared-amber-glow: rgba(217, 155, 56, 0.28);
+  --color-shared-amber-text: #f2b24c;
+
+  /* Text & Contrast */
+  --color-canvas-cream: #fbf9f5;
+  --color-canvas-sand: #ece7de;
+  --color-on-surface: #e6e1e4;
+  --color-on-surface-variant: #a39ea4;
+  --color-on-surface-subtle: #6c676e;
+
+  /* Subtle Borders & Hairlines */
+  --color-subtle-border: rgba(251, 249, 245, 0.08);
+  --color-accent-border: rgba(251, 249, 245, 0.16);
+  --color-border-amber: rgba(217, 155, 56, 0.32);
+  --color-border-ember: rgba(224, 86, 56, 0.32);
+  --color-border-sage: rgba(78, 124, 105, 0.32);
+
+  /* Status Colors */
+  --color-status-success: #4e7c69;
+  --color-status-warning: #d99b38;
+  --color-status-error: #cf4932;
+  --color-status-info: #5a8ab0;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-surface-deep);
+  color: var(--color-on-surface);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Safe Area Inset Support */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 16px);
+}
+
+/* Accessible Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Subtle custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-surface-deep);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-container-high);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-surface-container-highest);
+}

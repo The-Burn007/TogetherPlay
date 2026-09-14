@@ -1,0 +1,251 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with display name and couple membership pointer",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User visible name",
+          "maxLength": 60
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Avatar photo URL"
+        },
+        "coupleId": {
+          "type": "string",
+          "description": "ID of the couple space the user belongs to"
+        },
+        "timezone": {
+          "type": "string",
+          "description": "User timezone identifier"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of account creation"
+        },
+        "lastActiveAt": {
+          "type": "string",
+          "description": "ISO timestamp of last activity"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "disabled"]
+        }
+      },
+      "required": ["uid", "displayName", "createdAt", "status"]
+    },
+    "Couple": {
+      "title": "Couple",
+      "description": "A private relationship sanctuary space shared between exactly two partners",
+      "type": "object",
+      "properties": {
+        "coupleId": {
+          "type": "string",
+          "description": "Unique couple document identifier"
+        },
+        "memberIds": {
+          "type": "array",
+          "description": "Array of member UIDs (maximum 2 members in MVP)"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "UID of the partner who created the space"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of couple space creation"
+        },
+        "relationshipStartDate": {
+          "type": "string",
+          "description": "ISO date string or custom date for couple anniversary"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "deleted"]
+        }
+      },
+      "required": ["coupleId", "memberIds", "ownerId", "createdAt", "status"]
+    },
+    "CoupleInvite": {
+      "title": "CoupleInvite",
+      "description": "Secure invitation record storing hashed token for partner joining",
+      "type": "object",
+      "properties": {
+        "inviteId": {
+          "type": "string",
+          "description": "Unique invitation identifier"
+        },
+        "coupleId": {
+          "type": "string",
+          "description": "Couple ID for which this invitation is issued"
+        },
+        "inviterId": {
+          "type": "string",
+          "description": "UID of the inviting partner"
+        },
+        "inviterName": {
+          "type": "string",
+          "description": "Display name of the inviting partner"
+        },
+        "tokenHash": {
+          "type": "string",
+          "description": "SHA-256 cryptographic hash of the raw invite secret"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "expired", "revoked"]
+        },
+        "expiresAt": {
+          "type": "string",
+          "description": "ISO timestamp when the invite expires"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of invite creation"
+        },
+        "acceptedBy": {
+          "type": "string",
+          "description": "UID of the accepting partner"
+        }
+      },
+      "required": ["inviteId", "coupleId", "inviterId", "tokenHash", "status", "createdAt"]
+    },
+    "GameSession": {
+      "title": "GameSession",
+      "description": "Authoritative durable game session managed strictly by the server",
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "description": "Unique game session ID"
+        },
+        "coupleId": {
+          "type": "string",
+          "description": "Couple ID owning this game session"
+        },
+        "gameType": {
+          "type": "string",
+          "description": "Type identifier of the game"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["waiting", "ready", "countdown", "playing", "round_end", "game_end", "results"]
+        },
+        "playerIds": {
+          "type": "array",
+          "description": "List of player UIDs participating in the game"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the player who created the session"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of creation"
+        },
+        "startedAt": {
+          "type": "string",
+          "description": "ISO timestamp when game commenced"
+        },
+        "endedAt": {
+          "type": "string",
+          "description": "ISO timestamp when game concluded"
+        },
+        "winnerId": {
+          "type": "string",
+          "description": "UID of winner or null if tie"
+        },
+        "schemaVersion": {
+          "type": "number",
+          "description": "Schema format version"
+        }
+      },
+      "required": ["gameId", "coupleId", "gameType", "status", "playerIds", "createdBy", "createdAt", "schemaVersion"]
+    },
+    "GameResult": {
+      "title": "GameResult",
+      "description": "Authoritative durable completed game result and relational memory",
+      "type": "object",
+      "properties": {
+        "resultId": {
+          "type": "string",
+          "description": "Unique result record identifier"
+        },
+        "gameId": {
+          "type": "string",
+          "description": "Associated game session identifier"
+        },
+        "coupleId": {
+          "type": "string",
+          "description": "Couple ID"
+        },
+        "gameType": {
+          "type": "string",
+          "description": "Game type"
+        },
+        "playerIds": {
+          "type": "array",
+          "description": "List of participant player UIDs"
+        },
+        "winnerId": {
+          "type": "string",
+          "description": "UID of winning partner or null"
+        },
+        "durationSeconds": {
+          "type": "number",
+          "description": "Authoritative session duration in seconds"
+        },
+        "totalRounds": {
+          "type": "number",
+          "description": "Total rounds played"
+        },
+        "startedAt": {
+          "type": "string",
+          "description": "ISO timestamp of start"
+        },
+        "completedAt": {
+          "type": "string",
+          "description": "ISO timestamp of completion"
+        },
+        "serverTimestamp": {
+          "type": "number",
+          "description": "Server epoch millisecond timestamp"
+        }
+      },
+      "required": ["resultId", "gameId", "coupleId", "gameType", "playerIds", "durationSeconds", "totalRounds", "startedAt", "completedAt", "serverTimestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "User profile documents keyed by user UID"
+    },
+    "/couples/{coupleId}": {
+      "schema": "Couple",
+      "description": "Private sanctuary spaces for couples (max 2 members)"
+    },
+    "/coupleInvites/{inviteId}": {
+      "schema": "CoupleInvite",
+      "description": "One-way hashed invitation tokens for pairing partners"
+    },
+    "/games/{gameId}": {
+      "schema": "GameSession",
+      "description": "Durable authoritative game records (read-only for clients, server managed)"
+    },
+    "/gameResults/{resultId}": {
+      "schema": "GameResult",
+      "description": "Durable completed game results (read-only for clients, server managed)"
+    }
+  }
+}

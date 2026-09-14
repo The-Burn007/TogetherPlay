@@ -1,0 +1,38 @@
+{
+  "name": "togetherplay",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev -p 3000 -H 0.0.0.0",
+    "build": "next build",
+    "start": "next start -p 3000 -H 0.0.0.0",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:game": "vitest run tests/game-engine",
+    "test:security": "vitest run tests/security"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "clsx": "^2.1.1",
+    "firebase": "^12.0.0",
+    "lucide-react": "^1.45.0",
+    "motion": "^13.2.0",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss": "^4.3.3",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.25",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}

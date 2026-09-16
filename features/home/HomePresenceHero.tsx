@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
-import { CloudRain, SunMedium, Heart, Phone, Gamepad2, UserPlus, Sparkles } from "lucide-react";
+import { CloudRain, SunMedium, Heart, Phone, Gamepad2, UserPlus, Sparkles, Moon } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import type { HomeUserData, HomePartnerData } from "@/lib/firebase/services/home";
 
@@ -45,6 +45,7 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
   const isOnline = partner?.presenceState === "online";
   const isInGame = partner?.presenceState === "in_game";
   const isInCall = partner?.presenceState === "in_call";
+  const isAway = partner?.presenceState === "away";
   const isOffline = partner?.presenceState === "offline";
 
   return (
@@ -74,6 +75,8 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
                 ? "bg-shared-amber/15 border-shared-amber/40 text-shared-amber"
                 : isInCall
                 ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-400"
+                : isAway
+                ? "bg-amber-400/15 border-amber-400/40 text-amber-400"
                 : isOffline
                 ? "bg-surface-overlay border-subtle-border text-on-surface-variant"
                 : "bg-player-one-ember/15 border-player-one-ember/40 text-player-one-ember"
@@ -87,6 +90,8 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
                   ? "bg-shared-amber animate-pulse"
                   : isInCall
                   ? "bg-cyan-400 animate-ping"
+                  : isAway
+                  ? "bg-amber-400"
                   : isOffline
                   ? "bg-on-surface-variant/40"
                   : "bg-player-one-ember animate-pulse"
@@ -99,6 +104,8 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
                 ? "In Game"
                 : isInCall
                 ? "In Call"
+                : isAway
+                ? "Partner Away"
                 : isOffline
                 ? "Partner Offline"
                 : "Awaiting Partner"}
@@ -169,7 +176,7 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
                   name={partner.displayName}
                   colorRole="sage"
                   size="lg"
-                  isOnline={isOnline || isInGame || isInCall}
+                  isOnline={isOnline || isInGame || isInCall || isAway}
                   imageUrl={partner.avatarUrl}
                 />
                 {isInGame && (
@@ -180,6 +187,11 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
                 {isInCall && (
                   <span className="absolute -top-1 -right-1 p-1 rounded-full bg-cyan-500 text-surface-deep shadow-md" title="In call">
                     <Phone className="w-3 h-3" />
+                  </span>
+                )}
+                {isAway && (
+                  <span className="absolute -top-1 -right-1 p-1 rounded-full bg-amber-400 text-surface-deep shadow-md" title="Away from screen">
+                    <Moon className="w-3 h-3" />
                   </span>
                 )}
               </div>

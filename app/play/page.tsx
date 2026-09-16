@@ -8,10 +8,12 @@ import { GameExperienceCard } from "@/features/games/GameExperienceCard";
 import { LobbyBar } from "@/features/games/LobbyBar";
 import { TOGETHERPLAY_GAMES, getFilterCounts } from "@/features/games/gameCatalog";
 import { useToast } from "@/components/ui/Toast";
+import { useNotifications } from "@/lib/presence/useNotifications";
 import { Sparkles, Compass } from "lucide-react";
 
 export default function PlayPage() {
   const { showToast } = useToast();
+  const { invitePartner } = useNotifications();
   const [activeFilter, setActiveFilter] = useState<FilterCategory>("all");
   const [selectedGameForLobby, setSelectedGameForLobby] = useState<string>("Find It First");
 
@@ -22,12 +24,13 @@ export default function PlayPage() {
     return TOGETHERPLAY_GAMES.filter((g) => g.filterTags.includes(activeFilter));
   }, [activeFilter]);
 
-  const handlePlayTogether = (gameId: string) => {
+  const handlePlayTogether = async (gameId: string) => {
     const targetGame = TOGETHERPLAY_GAMES.find((g) => g.id === gameId);
     if (targetGame) {
       setSelectedGameForLobby(targetGame.title);
+      await invitePartner(targetGame.id, targetGame.title);
       showToast({
-        message: `Synchronizing ${targetGame.title} room with Sam in Tokyo...`,
+        message: `Invited Sam in Tokyo to play ${targetGame.title}!`,
         variant: "info",
       });
     }

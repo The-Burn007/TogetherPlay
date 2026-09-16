@@ -16,7 +16,118 @@
  * All state mutations and game logic run on the server using server-side timestamps.
  */
 
-import type { GameSession, GameState, GameAction, GameResult } from "@/types/domain";
+import type {
+  GameSession,
+  GameState,
+  GameAction,
+  GameResult,
+  CoupleRaceTile,
+  CoupleRacePowerType,
+  CoupleRacePlayerState,
+  CameraChallengePrompt,
+} from "@/types/domain";
+
+export const CAMERA_CHALLENGES: CameraChallengePrompt[] = [
+  {
+    id: "cam_blue_object",
+    title: "Show something blue.",
+    category: "scavenger",
+    description: "Search your surroundings and hold up an unmistakably blue object to the camera.",
+    hint: "Books, clothing, mugs, or pens count!",
+    countdownSeconds: 3,
+    durationSeconds: 20,
+  },
+  {
+    id: "cam_copy_pose",
+    title: "Copy your partner's pose.",
+    category: "pose",
+    description: "Study your partner's exact stance or gesture and match it mirror-image in your frame.",
+    hint: "Freeze once you have matched each other.",
+    countdownSeconds: 3,
+    durationSeconds: 20,
+  },
+  {
+    id: "cam_funniest_face",
+    title: "Make your funniest face.",
+    category: "expression",
+    description: "Hold nothing back. Channel your most absurd, dramatic, or hilarious expression.",
+    hint: "No laughing until both partner captures are locked in!",
+    countdownSeconds: 3,
+    durationSeconds: 15,
+  },
+  {
+    id: "cam_gift_from_partner",
+    title: "Find something your partner gave you.",
+    category: "memory",
+    description: "Retrieve a memento, letter, gift, or souvenir your partner gave you across the miles.",
+    hint: "Even small tokens or shared keepsakes count.",
+    countdownSeconds: 3,
+    durationSeconds: 30,
+  },
+  {
+    id: "cam_first_profile_pic",
+    title: "Recreate your first profile picture.",
+    category: "expression",
+    description: "Do you remember your earliest avatar or profile photo when you two met? Re-enact that exact face.",
+    hint: "Angle, smirk, or tilt included!",
+    countdownSeconds: 3,
+    durationSeconds: 20,
+  },
+  {
+    id: "cam_heart_hands",
+    title: "Complete the heart across screens.",
+    category: "synchrony",
+    description: "Place your half of a hand-heart on your screen edge to connect with your partner's half.",
+    hint: "Align your fingers along the seam between your frames.",
+    countdownSeconds: 3,
+    durationSeconds: 20,
+  },
+  {
+    id: "cam_favorite_drink",
+    title: "Show your drink or snack.",
+    category: "scavenger",
+    description: "Raise your current cup of tea, coffee, water, or treat for a long-distance toast.",
+    hint: "Cheers across the timezones!",
+    countdownSeconds: 3,
+    durationSeconds: 20,
+  },
+  {
+    id: "cam_sweetest_smile",
+    title: "Give your warmest, sweetest smile.",
+    category: "expression",
+    description: "Look straight into the lens as if your partner is sitting directly across the table from you.",
+    hint: "Hold the gaze together until the timer finishes.",
+    countdownSeconds: 3,
+    durationSeconds: 15,
+  },
+];
+
+export const COUPLE_RACE_TILES: CoupleRaceTile[] = [
+  { index: 0, type: "START", name: "Meridian Arch", description: "The grand brass start & lap line (+50 lap bonus)", bonusPoints: 50 },
+  { index: 1, type: "REGULAR", name: "Cobblestone Way", description: "Smooth hand-laid pavers through the gardens" },
+  { index: 2, type: "BOOST", name: "Zephyr Current", description: "Swift tailwind sweeps you +2 tiles forward", bonusPoints: 25, stepOffset: 2 },
+  { index: 3, type: "REGULAR", name: "Amber Lantern", description: "Warm lamplight beside the fountain court" },
+  { index: 4, type: "POWER_CACHE", name: "Scriptorium Vault", description: "Unlocks an authoritative tactical power card" },
+  { index: 5, type: "REGULAR", name: "Ivy Trellis", description: "Climbing jasmine overlooking the central lawns" },
+  { index: 6, type: "HARMONY_SYNC", name: "Twin Fountains", description: "If partner is within 3 tiles, both earn harmony bonus", bonusPoints: 75 },
+  { index: 7, type: "REGULAR", name: "Carved Steps", description: "Polished sandstone ascending the terrace" },
+  { index: 8, type: "SCENIC_REST", name: "Tea Pavilion", description: "A peaceful respite overlooking the hills (+40 pts)", bonusPoints: 40 },
+  { index: 9, type: "REGULAR", name: "Sunlit Terrace", description: "Open mosaic tiles basking in afternoon light" },
+  { index: 10, type: "BOOST", name: "Canopy Glide", description: "Suspended brass cable advances you +2 tiles", bonusPoints: 25, stepOffset: 2 },
+  { index: 11, type: "REGULAR", name: "Mossy Milestone", description: "Carved stone marking the halfway quadrant" },
+  { index: 12, type: "POWER_CACHE", name: "Alchemist's Desk", description: "Unlocks an authoritative tactical power card" },
+  { index: 13, type: "REGULAR", name: "Whispering Bridge", description: "Arched wooden bridge spanning the water garden" },
+  { index: 14, type: "CHALLENGE_GATE", name: "Winds of Chance", description: "Requires roll of 4+ to cross cleanly, else step back 1", stepOffset: -1 },
+  { index: 15, type: "REGULAR", name: "Starlit Glade", description: "Soft grass fringed by illuminated magnolia" },
+  { index: 16, type: "HARMONY_SYNC", name: "Reflection Pool", description: "Resonance node: partner proximity rewards both", bonusPoints: 75 },
+  { index: 17, type: "REGULAR", name: "Marble Colonnade", description: "Fluted stone pillars framing the north fairway" },
+  { index: 18, type: "BOOST", name: "Swift Stream", description: "Fast river current surges your piece +2 tiles", bonusPoints: 25, stepOffset: 2 },
+  { index: 19, type: "REGULAR", name: "Rosewood Bench", description: "Quiet shaded alcove beneath ancient pines" },
+  { index: 20, type: "POWER_CACHE", name: "Reliquary Niche", description: "Unlocks an authoritative tactical power card" },
+  { index: 21, type: "REGULAR", name: "Grand Vista", description: "Panoramic vantage point across both worlds" },
+  { index: 22, type: "SCENIC_REST", name: "Observatory Balcony", description: "Lookout terrace tracking celestial arcs (+40 pts)", bonusPoints: 40 },
+  { index: 23, type: "REGULAR", name: "Bell Tower Foot", description: "Final approach before crossing the Meridian Arch" },
+];
 
 export interface ArtifactDefinition {
   id: string;
@@ -57,8 +168,8 @@ export class AuthoritativeGameEngine {
    * Generates a cryptographically secure random dice roll [1..6] on the server.
    * Client-supplied rolls are completely ignored.
    */
-  static serverRollDice(): number {
-    return Math.floor(Math.random() * 6) + 1;
+  static serverRollDice(min = 1, max = 6): number {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
   /**
@@ -124,40 +235,160 @@ export class AuthoritativeGameEngine {
         nextState.currentRound = 1;
         nextState.maxRounds = 5;
         nextState.roundStartedAtServer = serverTimestamp;
-        // Authoritative 15-second round deadline for tactile digital tabletop play
-        nextState.roundDeadlineServer = serverTimestamp + 15000;
         nextState.turnPlayerId = nextSession.playerIds[0] || playerId;
         nextState.isFinished = false;
         nextState.winnerId = null;
 
-        // Initialize Find It First authoritative board & target
-        const roundGen = this.generateAuthoritativeRound(1, []);
-        nextState.data = {
-          ...nextState.data,
-          targetId: roundGen.targetId,
-          targetName: roundGen.target.name,
-          targetCode: roundGen.target.code,
-          targetClue: roundGen.target.clue,
-          board: roundGen.board,
-          usedTargetIds: [roundGen.targetId],
-          roundWinnerId: null,
-          roundWinningCell: null,
-          lastMistake: null,
-          roundStage: "playing",
-          roundHistory: [],
-        };
+        if (session.gameType === "speed_duel") {
+          // Authoritative random tension delay: 1800ms - 4200ms
+          const tensionDelayMs = 1800 + Math.floor(Math.random() * 2400);
+          const targetAppearedAtServer = serverTimestamp + tensionDelayMs;
+          nextState.roundDeadlineServer = targetAppearedAtServer + 6000;
+          nextState.scores = Object.fromEntries(nextSession.playerIds.map((pid) => [pid, 0]));
 
-        nextSession.status = "playing";
-        nextSession.startedAt = new Date(serverTimestamp).toISOString();
+          nextState.data = {
+            gameType: "speed_duel",
+            roundStage: "tension",
+            tensionStartedAtServer: serverTimestamp,
+            tensionDelayMs,
+            targetAppearedAtServer,
+            roundWinnerId: null,
+            roundWinnerReactionMs: null,
+            roundWinnerReason: null,
+            playerReactions: {},
+            falseStarts: {},
+            roundHistory: [],
+            competitiveMode: "first_to_3",
+          };
 
-        authoritativePayload = {
-          started: true,
-          round: 1,
-          targetId: roundGen.targetId,
-          targetName: roundGen.target.name,
-          board: roundGen.board,
-          roundDeadlineServer: nextState.roundDeadlineServer,
-        };
+          nextSession.status = "playing";
+          nextSession.startedAt = new Date(serverTimestamp).toISOString();
+
+          authoritativePayload = {
+            started: true,
+            round: 1,
+            gameType: "speed_duel",
+            tensionDelayMs,
+            targetAppearedAtServer,
+            roundDeadlineServer: nextState.roundDeadlineServer,
+          };
+        } else if (session.gameType === "couple_race") {
+          // Initialize Couple Race digital tabletop board & authoritative players
+          const players: Record<string, CoupleRacePlayerState> = {};
+          for (const pid of nextSession.playerIds) {
+            players[pid] = {
+              playerId: pid,
+              position: 0,
+              lapsCompleted: 0,
+              powers: ["WIND_STRIDE"], // initial tactical card
+              shieldActive: false,
+              activeEffects: [],
+              totalRolls: 0,
+              connectionStatus: "connected",
+              disconnectedAt: null,
+            };
+          }
+
+          nextState.turnPlayerId = nextSession.playerIds[0] || playerId;
+          nextState.roundDeadlineServer = serverTimestamp + 45000; // 45s turn deadline
+          nextState.scores = Object.fromEntries(nextSession.playerIds.map((pid) => [pid, 0]));
+          nextState.currentRound = 1;
+          nextState.maxRounds = 10; // laps & turns
+
+          nextState.data = {
+            gameType: "couple_race",
+            mode: "competitive",
+            boardSize: 24,
+            targetLaps: 2,
+            players,
+            currentTurnPlayerId: nextState.turnPlayerId,
+            turnNumber: 1,
+            hasRolledThisTurn: false,
+            hasMovedThisTurn: false,
+            currentDiceValue: null,
+            secondDiceValue: null,
+            validMovePositions: [],
+            activePowerThisTurn: null,
+            isPaused: false,
+            pausedByPlayerId: null,
+            roundHistory: [],
+            cooperativeHarmonyScore: 0,
+          };
+
+          nextSession.status = "playing";
+          nextSession.startedAt = new Date(serverTimestamp).toISOString();
+
+          authoritativePayload = {
+            started: true,
+            gameType: "couple_race",
+            turnPlayerId: nextState.turnPlayerId,
+            boardSize: 24,
+            targetLaps: 2,
+            players,
+          };
+        } else if (session.gameType === "camera_challenge") {
+          const currentPrompt = CAMERA_CHALLENGES[0];
+          nextState.currentRound = 1;
+          nextState.maxRounds = 5;
+          nextState.scores = Object.fromEntries(nextSession.playerIds.map((pid) => [pid, 0]));
+          nextState.roundStartedAtServer = serverTimestamp;
+          nextState.roundDeadlineServer = serverTimestamp + 60000;
+
+          nextState.data = {
+            gameType: "camera_challenge",
+            stage: "challenge",
+            currentPromptIndex: 0,
+            currentPrompt,
+            submissions: {},
+            stageStartedAtServer: serverTimestamp,
+            stageDeadlineServer: serverTimestamp + 60000,
+            roundHistory: [],
+            skips: {},
+            isGameEnd: false,
+          };
+
+          nextSession.status = "playing";
+          nextSession.startedAt = new Date(serverTimestamp).toISOString();
+
+          authoritativePayload = {
+            started: true,
+            gameType: "camera_challenge",
+            round: 1,
+            stage: "challenge",
+            prompt: currentPrompt,
+          };
+        } else {
+          // Initialize Find It First authoritative board & target
+          // Authoritative 15-second round deadline for tactile digital tabletop play
+          nextState.roundDeadlineServer = serverTimestamp + 15000;
+          const roundGen = this.generateAuthoritativeRound(1, []);
+          nextState.data = {
+            ...nextState.data,
+            targetId: roundGen.targetId,
+            targetName: roundGen.target.name,
+            targetCode: roundGen.target.code,
+            targetClue: roundGen.target.clue,
+            board: roundGen.board,
+            usedTargetIds: [roundGen.targetId],
+            roundWinnerId: null,
+            roundWinningCell: null,
+            lastMistake: null,
+            roundStage: "playing",
+            roundHistory: [],
+          };
+
+          nextSession.status = "playing";
+          nextSession.startedAt = new Date(serverTimestamp).toISOString();
+
+          authoritativePayload = {
+            started: true,
+            round: 1,
+            targetId: roundGen.targetId,
+            targetName: roundGen.target.name,
+            board: roundGen.board,
+            roundDeadlineServer: nextState.roundDeadlineServer,
+          };
+        }
         break;
       }
 
@@ -182,6 +413,70 @@ export class AuthoritativeGameEngine {
       }
 
       case "ROLL_DICE": {
+        if (session.gameType === "couple_race") {
+          if (nextState.turnPlayerId && nextState.turnPlayerId !== playerId) {
+            authoritativePayload = { error: "NOT_YOUR_TURN", turnPlayerId: nextState.turnPlayerId };
+            break;
+          }
+          if (nextState.data.hasRolledThisTurn) {
+            authoritativePayload = { error: "ALREADY_ROLLED_THIS_TURN" };
+            break;
+          }
+
+          // Authoritative server randomness: client dice rolls are ignored
+          const activePower = nextState.data.activePowerThisTurn as CoupleRacePowerType | null;
+          let serverDiceValue = this.serverRollDice();
+          let secondDiceValue: number | null = null;
+
+          if (activePower === "DOUBLE_DICE") {
+            secondDiceValue = this.serverRollDice();
+            serverDiceValue = serverDiceValue + secondDiceValue;
+          }
+
+          let distance = serverDiceValue;
+          if (activePower === "WIND_STRIDE") {
+            distance += 2;
+          }
+
+          const players = (nextState.data.players || {}) as Record<string, CoupleRacePlayerState>;
+          const playerState = players[playerId] || {
+            playerId,
+            position: 0,
+            lapsCompleted: 0,
+            powers: [],
+            shieldActive: false,
+            activeEffects: [],
+            totalRolls: 0,
+            connectionStatus: "connected",
+            disconnectedAt: null,
+          };
+
+          const currentPos = playerState.position || 0;
+          const boardSize = Number(nextState.data.boardSize) || 24;
+          const targetPos = (currentPos + distance) % boardSize;
+          const validMovePositions = [targetPos];
+
+          nextState.data.hasRolledThisTurn = true;
+          nextState.data.currentDiceValue = serverDiceValue;
+          nextState.data.secondDiceValue = secondDiceValue;
+          nextState.data.effectiveDistance = distance;
+          nextState.data.validMovePositions = validMovePositions;
+
+          playerState.totalRolls = (playerState.totalRolls || 0) + 1;
+          players[playerId] = playerState;
+          nextState.data.players = players;
+
+          authoritativePayload = {
+            diceValue: serverDiceValue,
+            secondDiceValue,
+            totalDistance: distance,
+            validMovePositions,
+            turnPlayerId: nextState.turnPlayerId,
+            hasRolled: true,
+          };
+          break;
+        }
+
         // SECURITY: Server generates the dice roll! Any roll in action.payload is ignored.
         const serverDiceValue = this.serverRollDice();
 
@@ -214,6 +509,277 @@ export class AuthoritativeGameEngine {
           newScore,
           scores: { ...nextState.scores },
           turnPlayerId: nextState.turnPlayerId,
+        };
+        break;
+      }
+
+      case "MOVE": {
+        if (session.gameType === "couple_race") {
+          if (nextState.turnPlayerId && nextState.turnPlayerId !== playerId) {
+            authoritativePayload = { error: "NOT_YOUR_TURN" };
+            break;
+          }
+          if (!nextState.data.hasRolledThisTurn) {
+            authoritativePayload = { error: "MUST_ROLL_FIRST" };
+            break;
+          }
+          if (nextState.data.hasMovedThisTurn) {
+            authoritativePayload = { error: "ALREADY_MOVED_THIS_TURN" };
+            break;
+          }
+
+          const rawPayload = (action.payload && typeof action.payload === "object" ? action.payload : {}) as Record<string, unknown>;
+          const requestedTarget = typeof rawPayload.targetPosition === "number" ? rawPayload.targetPosition : null;
+          const validMoves = (nextState.data.validMovePositions as number[]) || [];
+
+          const targetPos = requestedTarget !== null && validMoves.includes(requestedTarget) ? requestedTarget : validMoves[0];
+          const players = (nextState.data.players || {}) as Record<string, CoupleRacePlayerState>;
+          const pState = players[playerId] || {
+            playerId,
+            position: 0,
+            lapsCompleted: 0,
+            powers: [],
+            shieldActive: false,
+            activeEffects: [],
+            totalRolls: 0,
+            connectionStatus: "connected",
+            disconnectedAt: null,
+          };
+
+          const oldPos = pState.position;
+          const distance = Number(nextState.data.effectiveDistance) || Number(nextState.data.currentDiceValue) || 1;
+          const boardSize = Number(nextState.data.boardSize) || 24;
+
+          // Lap completion check: advancing past tile 0
+          let completedLap = false;
+          if (oldPos + distance >= boardSize) {
+            pState.lapsCompleted += 1;
+            completedLap = true;
+            nextState.scores[playerId] = (nextState.scores[playerId] || 0) + 100;
+          }
+
+          // Landing tile effect
+          let finalPos = targetPos;
+          const tile = COUPLE_RACE_TILES[targetPos] || COUPLE_RACE_TILES[0];
+          let bonusPoints = tile.bonusPoints || 10;
+          let powerAwarded: CoupleRacePowerType | null = null;
+          let tileEffectDescription = tile.description;
+
+          if (tile.type === "BOOST") {
+            finalPos = (targetPos + (tile.stepOffset || 2)) % boardSize;
+            bonusPoints += 25;
+            tileEffectDescription = "Zephyr Boost: swept forward +2 tiles!";
+          } else if (tile.type === "POWER_CACHE") {
+            const powerList: CoupleRacePowerType[] = ["WIND_STRIDE", "DOUBLE_DICE", "HARMONY_LEAP", "SHIELD_AURA"];
+            powerAwarded = powerList[Math.floor(Math.random() * powerList.length)];
+            pState.powers = [...(pState.powers || []), powerAwarded];
+            bonusPoints += 20;
+            tileEffectDescription = `Scriptorium Vault: unlocked ${powerAwarded} card!`;
+          } else if (tile.type === "HARMONY_SYNC") {
+            const otherPid = nextSession.playerIds.find((p) => p !== playerId);
+            const otherPos = otherPid && players[otherPid] ? players[otherPid].position : -99;
+            const diff = Math.abs(finalPos - otherPos);
+            if (diff <= 3 || diff >= boardSize - 3) {
+              bonusPoints += 75;
+              if (otherPid) {
+                nextState.scores[otherPid] = (nextState.scores[otherPid] || 0) + 75;
+              }
+              nextState.data.cooperativeHarmonyScore = (Number(nextState.data.cooperativeHarmonyScore) || 0) + 100;
+              tileEffectDescription = "Twin Fountains resonance: both players gain harmony bonus!";
+            }
+          } else if (tile.type === "CHALLENGE_GATE") {
+            const diceVal = Number(nextState.data.currentDiceValue) || 4;
+            if (diceVal < 4 && !pState.shieldActive) {
+              finalPos = (targetPos - 1 + boardSize) % boardSize;
+              tileEffectDescription = "Winds of Chance: roll under 4, stepped back 1 tile.";
+            } else if (pState.shieldActive) {
+              pState.shieldActive = false;
+              tileEffectDescription = "Shield of Harmony absorbed the Winds of Chance!";
+            }
+          }
+
+          pState.position = finalPos;
+          nextState.scores[playerId] = (nextState.scores[playerId] || 0) + bonusPoints;
+          players[playerId] = pState;
+          nextState.data.players = players;
+          nextState.data.hasMovedThisTurn = true;
+          nextState.data.activePowerThisTurn = null;
+
+          // Record in round history
+          const history = Array.isArray(nextState.data.roundHistory) ? [...nextState.data.roundHistory] : [];
+          history.push({
+            turn: Number(nextState.data.turnNumber) || 1,
+            playerId,
+            action: "MOVE",
+            diceValue: Number(nextState.data.currentDiceValue) || distance,
+            fromPos: oldPos,
+            toPos: finalPos,
+            tileType: tile.type,
+            pointsEarned: bonusPoints,
+            powerUsed: powerAwarded || undefined,
+            timestamp: serverTimestamp,
+          });
+          nextState.data.roundHistory = history;
+
+          // Win condition: First to complete targetLaps (default 2)
+          const targetLaps = Number(nextState.data.targetLaps) || 2;
+          if (pState.lapsCompleted >= targetLaps) {
+            nextState.status = "game_end";
+            nextState.isFinished = true;
+            nextState.winnerId = playerId;
+            createdResult = this.finalizeGame(nextSession, nextState, serverTimestamp);
+          }
+
+          authoritativePayload = {
+            moved: true,
+            playerId,
+            fromPos: oldPos,
+            toPos: finalPos,
+            tileType: tile.type,
+            tileName: tile.name,
+            tileEffectDescription,
+            lapsCompleted: pState.lapsCompleted,
+            completedLap,
+            bonusPoints,
+            powerAwarded,
+            scores: { ...nextState.scores },
+            isWinner: nextState.winnerId === playerId,
+          };
+        }
+        break;
+      }
+
+      case "USE_POWER": {
+        if (session.gameType === "couple_race") {
+          if (nextState.turnPlayerId && nextState.turnPlayerId !== playerId) {
+            authoritativePayload = { error: "NOT_YOUR_TURN" };
+            break;
+          }
+          const rawPayload = (action.payload && typeof action.payload === "object" ? action.payload : {}) as Record<string, unknown>;
+          const power = String(rawPayload.power || "") as CoupleRacePowerType;
+          const players = (nextState.data.players || {}) as Record<string, CoupleRacePlayerState>;
+          const pState = players[playerId];
+
+          if (!pState || !pState.powers || !pState.powers.includes(power)) {
+            authoritativePayload = { error: "POWER_NOT_OWNED", power };
+            break;
+          }
+
+          // Remove power from inventory
+          const powerIdx = pState.powers.indexOf(power);
+          pState.powers.splice(powerIdx, 1);
+
+          let effectMessage = "";
+          if (power === "HARMONY_LEAP") {
+            const otherPid = nextSession.playerIds.find((p) => p !== playerId);
+            if (otherPid && players[otherPid]) {
+              const partnerPos = players[otherPid].position;
+              pState.position = partnerPos;
+              nextState.data.hasMovedThisTurn = true;
+              nextState.scores[playerId] = (nextState.scores[playerId] || 0) + 50;
+              nextState.data.cooperativeHarmonyScore = (Number(nextState.data.cooperativeHarmonyScore) || 0) + 50;
+              effectMessage = "Harmony Leap: synchronized directly with partner!";
+            }
+          } else if (power === "SHIELD_AURA") {
+            pState.shieldActive = true;
+            effectMessage = "Shield of Harmony active: protected against hazards!";
+          } else if (power === "WIND_STRIDE") {
+            nextState.data.activePowerThisTurn = "WIND_STRIDE";
+            effectMessage = "Wind Stride prepared: +2 movement tiles on next roll!";
+          } else if (power === "DOUBLE_DICE") {
+            nextState.data.activePowerThisTurn = "DOUBLE_DICE";
+            effectMessage = "Double Stride prepared: two dice will be rolled!";
+          }
+
+          players[playerId] = pState;
+          nextState.data.players = players;
+
+          authoritativePayload = {
+            powerUsed: power,
+            playerId,
+            remainingPowers: [...pState.powers],
+            effectMessage,
+          };
+        }
+        break;
+      }
+
+      case "END_TURN": {
+        if (session.gameType === "couple_race") {
+          if (nextState.turnPlayerId && nextState.turnPlayerId !== playerId) {
+            authoritativePayload = { error: "NOT_YOUR_TURN" };
+            break;
+          }
+
+          const otherPlayer = nextSession.playerIds.find((id) => id !== playerId) || playerId;
+          nextState.turnPlayerId = otherPlayer;
+          nextState.data.currentTurnPlayerId = otherPlayer;
+          nextState.data.hasRolledThisTurn = false;
+          nextState.data.hasMovedThisTurn = false;
+          nextState.data.currentDiceValue = null;
+          nextState.data.secondDiceValue = null;
+          nextState.data.validMovePositions = [];
+          nextState.data.activePowerThisTurn = null;
+          nextState.data.turnNumber = (Number(nextState.data.turnNumber) || 1) + 1;
+          nextState.roundDeadlineServer = serverTimestamp + 45000;
+
+          authoritativePayload = {
+            turnEnded: true,
+            nextTurnPlayerId: otherPlayer,
+            turnNumber: nextState.data.turnNumber,
+          };
+        }
+        break;
+      }
+
+      case "PAUSE_GAME": {
+        nextState.data.isPaused = true;
+        nextState.data.pausedByPlayerId = playerId;
+        nextState.data.pauseRemainingMs = Math.max(0, nextState.roundDeadlineServer - serverTimestamp);
+        authoritativePayload = {
+          isPaused: true,
+          pausedByPlayerId: playerId,
+        };
+        break;
+      }
+
+      case "RESUME_GAME": {
+        nextState.data.isPaused = false;
+        nextState.data.pausedByPlayerId = null;
+        const remainingMs = Number(nextState.data.pauseRemainingMs) || 30000;
+        nextState.roundDeadlineServer = serverTimestamp + remainingMs;
+        authoritativePayload = {
+          isPaused: false,
+        };
+        break;
+      }
+
+      case "PLAYER_DISCONNECT": {
+        const players = (nextState.data.players || {}) as Record<string, CoupleRacePlayerState>;
+        if (players[playerId]) {
+          players[playerId].connectionStatus = "disconnected";
+          players[playerId].disconnectedAt = serverTimestamp;
+        }
+        nextState.data.players = players;
+        authoritativePayload = {
+          connectionStatus: "disconnected",
+          playerId,
+          serverTimestamp,
+        };
+        break;
+      }
+
+      case "PLAYER_RECONNECT": {
+        const players = (nextState.data.players || {}) as Record<string, CoupleRacePlayerState>;
+        if (players[playerId]) {
+          players[playerId].connectionStatus = "connected";
+          players[playerId].disconnectedAt = null;
+        }
+        nextState.data.players = players;
+        authoritativePayload = {
+          connectionStatus: "connected",
+          playerId,
+          serverTimestamp,
         };
         break;
       }
@@ -315,6 +881,50 @@ export class AuthoritativeGameEngine {
       }
 
       case "NEXT_ROUND": {
+        if (session.gameType === "speed_duel") {
+          const history = Array.isArray(nextState.data.roundHistory) ? nextState.data.roundHistory : [];
+          const alexWins = history.filter((r) => r.winnerId === nextSession.playerIds[0]).length;
+          const samWins = history.filter((r) => r.winnerId === nextSession.playerIds[1]).length;
+          const isFirstTo3 = nextState.data.competitiveMode !== "standard_5";
+
+          if ((isFirstTo3 && (alexWins >= 3 || samWins >= 3)) || nextState.currentRound >= nextState.maxRounds) {
+            createdResult = this.finalizeGame(nextSession, nextState, serverTimestamp);
+            nextState.status = "game_end";
+            nextState.data.roundStage = "game_end";
+            authoritativePayload = { gameEnded: true, winnerId: nextState.winnerId };
+            break;
+          }
+
+          nextState.currentRound += 1;
+          const tensionDelayMs = 1800 + Math.floor(Math.random() * 2400);
+          const targetAppearedAtServer = serverTimestamp + tensionDelayMs;
+          nextState.roundStartedAtServer = serverTimestamp;
+          nextState.roundDeadlineServer = targetAppearedAtServer + 6000;
+          nextState.status = "playing";
+
+          nextState.data = {
+            ...nextState.data,
+            roundStage: "tension",
+            tensionStartedAtServer: serverTimestamp,
+            tensionDelayMs,
+            targetAppearedAtServer,
+            roundWinnerId: null,
+            roundWinnerReactionMs: null,
+            roundWinnerReason: null,
+            playerReactions: {},
+            falseStarts: {},
+            lastMistake: null,
+          };
+
+          authoritativePayload = {
+            round: nextState.currentRound,
+            tensionDelayMs,
+            targetAppearedAtServer,
+            roundDeadlineServer: nextState.roundDeadlineServer,
+          };
+          break;
+        }
+
         if (nextState.currentRound >= nextState.maxRounds) {
           createdResult = this.finalizeGame(nextSession, nextState, serverTimestamp);
           nextState.status = "game_end";
@@ -364,6 +974,128 @@ export class AuthoritativeGameEngine {
         nextSession.startedAt = new Date(serverTimestamp).toISOString();
         delete nextSession.endedAt;
 
+        if (session.gameType === "speed_duel") {
+          const tensionDelayMs = 1800 + Math.floor(Math.random() * 2400);
+          const targetAppearedAtServer = serverTimestamp + tensionDelayMs;
+          nextState.roundStartedAtServer = serverTimestamp;
+          nextState.roundDeadlineServer = targetAppearedAtServer + 6000;
+
+          nextState.data = {
+            ...nextState.data,
+            gameType: "speed_duel",
+            roundStage: "tension",
+            tensionStartedAtServer: serverTimestamp,
+            tensionDelayMs,
+            targetAppearedAtServer,
+            roundWinnerId: null,
+            roundWinnerReactionMs: null,
+            roundWinnerReason: null,
+            playerReactions: {},
+            falseStarts: {},
+            roundHistory: [],
+          };
+
+          authoritativePayload = {
+            rematchStarted: true,
+            round: 1,
+            gameType: "speed_duel",
+            tensionDelayMs,
+            targetAppearedAtServer,
+            roundDeadlineServer: nextState.roundDeadlineServer,
+          };
+          break;
+        }
+
+        if (session.gameType === "couple_race") {
+          const players: Record<string, CoupleRacePlayerState> = {};
+          for (const pid of nextSession.playerIds) {
+            players[pid] = {
+              playerId: pid,
+              position: 0,
+              lapsCompleted: 0,
+              powers: ["WIND_STRIDE"],
+              shieldActive: false,
+              activeEffects: [],
+              totalRolls: 0,
+              connectionStatus: "connected",
+              disconnectedAt: null,
+            };
+          }
+
+          nextState.turnPlayerId = nextSession.playerIds[0] || playerId;
+          nextState.roundDeadlineServer = serverTimestamp + 45000;
+          nextState.status = "playing";
+          nextState.isFinished = false;
+          nextState.winnerId = null;
+          nextState.currentRound = 1;
+          nextState.maxRounds = 10;
+          nextState.scores = Object.fromEntries(nextSession.playerIds.map((pid) => [pid, 0]));
+
+          nextState.data = {
+            gameType: "couple_race",
+            mode: "competitive",
+            boardSize: 24,
+            targetLaps: 2,
+            players,
+            currentTurnPlayerId: nextState.turnPlayerId,
+            turnNumber: 1,
+            hasRolledThisTurn: false,
+            hasMovedThisTurn: false,
+            currentDiceValue: null,
+            secondDiceValue: null,
+            validMovePositions: [],
+            activePowerThisTurn: null,
+            isPaused: false,
+            pausedByPlayerId: null,
+            roundHistory: [],
+            cooperativeHarmonyScore: 0,
+          };
+
+          authoritativePayload = {
+            rematchStarted: true,
+            gameType: "couple_race",
+            turnPlayerId: nextState.turnPlayerId,
+          };
+          break;
+        }
+
+        if (session.gameType === "camera_challenge") {
+          const firstPrompt = CAMERA_CHALLENGES[Math.floor(Math.random() * CAMERA_CHALLENGES.length)];
+          nextState.currentRound = 1;
+          nextState.maxRounds = 5;
+          nextState.status = "playing";
+          nextState.isFinished = false;
+          nextState.winnerId = null;
+          nextState.scores = Object.fromEntries(nextSession.playerIds.map((pid) => [pid, 0]));
+
+          nextSession.status = "playing";
+          nextSession.winnerId = null;
+          nextSession.startedAt = new Date(serverTimestamp).toISOString();
+          delete nextSession.endedAt;
+
+          nextState.data = {
+            gameType: "camera_challenge",
+            stage: "challenge",
+            currentPromptIndex: CAMERA_CHALLENGES.findIndex((c) => c.id === firstPrompt.id),
+            currentPrompt: firstPrompt,
+            submissions: {},
+            stageStartedAtServer: serverTimestamp,
+            stageDeadlineServer: serverTimestamp + 60000,
+            roundHistory: [],
+            skips: {},
+            isGameEnd: false,
+          };
+
+          authoritativePayload = {
+            rematchStarted: true,
+            round: 1,
+            gameType: "camera_challenge",
+            stage: "challenge",
+            prompt: firstPrompt,
+          };
+          break;
+        }
+
         const roundGen = this.generateAuthoritativeRound(1, []);
         nextState.data = {
           targetId: roundGen.targetId,
@@ -393,7 +1125,164 @@ export class AuthoritativeGameEngine {
         break;
       }
 
+      case "TRIGGER_TARGET": {
+        if (session.gameType === "speed_duel") {
+          const targetTime = Number(nextState.data.targetAppearedAtServer) || 0;
+          if (serverTimestamp >= targetTime - 120) {
+            nextState.data.roundStage = "active";
+            authoritativePayload = {
+              targetActive: true,
+              targetAppearedAtServer: targetTime,
+              roundStage: "active",
+            };
+          } else {
+            authoritativePayload = {
+              targetActive: false,
+              reason: "Tension window not elapsed on server",
+            };
+          }
+        }
+        break;
+      }
+
       case "SUBMIT_REACTION": {
+        if (session.gameType === "speed_duel") {
+          const targetTime = Number(nextState.data.targetAppearedAtServer) || 0;
+          const currentStage = String(nextState.data.roundStage || "tension");
+
+          // Check if this round already has a recorded winner (second player's reaction arrives)
+          if (nextState.data.roundWinnerId) {
+            const reactionTimeMs = targetTime > 0 ? Math.max(1, serverTimestamp - targetTime) : 0;
+            const reactions = (nextState.data.playerReactions as Record<string, number>) || {};
+            reactions[playerId] = reactionTimeMs;
+            nextState.data.playerReactions = reactions;
+
+            const winnerReaction = Number(nextState.data.roundWinnerReactionMs) || 0;
+            const deltaMs = winnerReaction > 0 ? reactionTimeMs - winnerReaction : 0;
+
+            authoritativePayload = {
+              alreadyResolved: true,
+              roundWinnerId: nextState.data.roundWinnerId,
+              yourReactionMs: reactionTimeMs,
+              deltaMs,
+              scores: { ...nextState.scores },
+            };
+            break;
+          }
+
+          // Case 1: FALSE START (Reaction arrived before targetAppearedAtServer or during tension)
+          if (serverTimestamp < targetTime || currentStage === "tension") {
+            const falseStarts = (nextState.data.falseStarts as Record<string, number>) || {};
+            falseStarts[playerId] = serverTimestamp;
+            nextState.data.falseStarts = falseStarts;
+
+            const opponentId = nextSession.playerIds.find((id) => id !== playerId) || "user_sam";
+            nextState.data.roundWinnerId = opponentId;
+            nextState.data.roundWinnerReactionMs = null;
+            nextState.data.roundWinnerReason = "opponent_false_start";
+            nextState.data.falseStartPlayerId = playerId;
+            nextState.data.roundStage = "round_result";
+            nextState.status = "round_end";
+
+            const pointsAwarded = 100;
+            nextState.scores[opponentId] = (nextState.scores[opponentId] || 0) + pointsAwarded;
+
+            const roundHistory = Array.isArray(nextState.data.roundHistory)
+              ? [...(nextState.data.roundHistory as Array<Record<string, unknown>>)]
+              : [];
+            roundHistory.push({
+              round: nextState.currentRound,
+              winnerId: opponentId,
+              isFalseStart: true,
+              falseStartPlayerId: playerId,
+              pointsAwarded,
+              scoresAtEnd: { ...nextState.scores },
+              serverTimestamp,
+            });
+            nextState.data.roundHistory = roundHistory;
+
+            // Check competitive completion
+            const p1Wins = roundHistory.filter((r) => r.winnerId === nextSession.playerIds[0]).length;
+            const p2Wins = roundHistory.filter((r) => r.winnerId === nextSession.playerIds[1]).length;
+            const isFirstTo3 = nextState.data.competitiveMode !== "standard_5";
+
+            if ((isFirstTo3 && (p1Wins >= 3 || p2Wins >= 3)) || nextState.currentRound >= nextState.maxRounds) {
+              createdResult = this.finalizeGame(nextSession, nextState, serverTimestamp);
+              nextState.status = "game_end";
+              nextState.data.roundStage = "game_end";
+            }
+
+            authoritativePayload = {
+              isFalseStart: true,
+              falseStartPlayerId: playerId,
+              roundWinnerId: opponentId,
+              pointsAwarded,
+              scores: { ...nextState.scores },
+              currentRound: nextState.currentRound,
+              isFinished: nextState.isFinished,
+            };
+            break;
+          }
+
+          // Case 2: FIRST VALID REACTION (Server determines accepted action ordering)
+          nextState.data.roundStage = "round_result";
+          nextState.status = "round_end";
+
+          const reactionTimeMs = Math.max(1, serverTimestamp - targetTime);
+          const reactions = (nextState.data.playerReactions as Record<string, number>) || {};
+          reactions[playerId] = reactionTimeMs;
+          nextState.data.playerReactions = reactions;
+
+          // Speed bonus: faster reactions earn higher bonus points
+          const speedBonus = Math.max(0, Math.min(250, Math.floor((1000 - reactionTimeMs) / 3)));
+          const pointsAwarded = 100 + speedBonus;
+
+          nextState.scores[playerId] = (nextState.scores[playerId] || 0) + pointsAwarded;
+          nextState.data.roundWinnerId = playerId;
+          nextState.data.roundWinnerReactionMs = reactionTimeMs;
+          nextState.data.roundWinnerReason = "fastest_reaction";
+          nextState.data.pointsAwarded = pointsAwarded;
+          nextState.data.speedBonus = speedBonus;
+
+          const roundHistory = Array.isArray(nextState.data.roundHistory)
+            ? [...(nextState.data.roundHistory as Array<Record<string, unknown>>)]
+            : [];
+          roundHistory.push({
+            round: nextState.currentRound,
+            winnerId: playerId,
+            reactionMs: reactionTimeMs,
+            pointsAwarded,
+            speedBonus,
+            scoresAtEnd: { ...nextState.scores },
+            serverTimestamp,
+          });
+          nextState.data.roundHistory = roundHistory;
+
+          // Check match completion
+          const p1Wins = roundHistory.filter((r) => r.winnerId === nextSession.playerIds[0]).length;
+          const p2Wins = roundHistory.filter((r) => r.winnerId === nextSession.playerIds[1]).length;
+          const isFirstTo3 = nextState.data.competitiveMode !== "standard_5";
+
+          if ((isFirstTo3 && (p1Wins >= 3 || p2Wins >= 3)) || nextState.currentRound >= nextState.maxRounds) {
+            createdResult = this.finalizeGame(nextSession, nextState, serverTimestamp);
+            nextState.status = "game_end";
+            nextState.data.roundStage = "game_end";
+          }
+
+          authoritativePayload = {
+            isWinner: true,
+            roundWinnerId: playerId,
+            reactionTimeMs,
+            pointsAwarded,
+            speedBonus,
+            scores: { ...nextState.scores },
+            currentRound: nextState.currentRound,
+            isFinished: nextState.isFinished,
+          };
+          break;
+        }
+
+        // Generic fallback reaction logic for other games
         // SECURITY: Reaction speed measured against server start timestamp, NOT client timestamp
         const reactionTimeMs = Math.max(0, serverTimestamp - nextState.roundStartedAtServer);
         
@@ -406,6 +1295,171 @@ export class AuthoritativeGameEngine {
           pointsAwarded,
           scores: { ...nextState.scores },
         };
+        break;
+      }
+
+      case "START_COUNTDOWN": {
+        if (session.gameType === "camera_challenge") {
+          const countdownDurationMs = 3000;
+          nextState.data.stage = "countdown";
+          nextState.data.stageStartedAtServer = serverTimestamp;
+          nextState.data.stageDeadlineServer = serverTimestamp + countdownDurationMs;
+          nextState.data.submissions = {};
+
+          authoritativePayload = {
+            stage: "countdown",
+            countdownSeconds: 3,
+            stageDeadlineServer: nextState.data.stageDeadlineServer,
+          };
+        }
+        break;
+      }
+
+      case "START_PERFORM": {
+        if (session.gameType === "camera_challenge") {
+          const currentPrompt = (nextState.data.currentPrompt as CameraChallengePrompt) || CAMERA_CHALLENGES[0];
+          const durationSeconds = currentPrompt.durationSeconds || 20;
+          const durationMs = durationSeconds * 1000;
+
+          nextState.data.stage = "perform";
+          nextState.data.stageStartedAtServer = serverTimestamp;
+          nextState.data.stageDeadlineServer = serverTimestamp + durationMs;
+          nextState.data.submissions = {};
+
+          authoritativePayload = {
+            stage: "perform",
+            durationSeconds,
+            stageDeadlineServer: nextState.data.stageDeadlineServer,
+          };
+        }
+        break;
+      }
+
+      case "SUBMIT_CAMERA_CHALLENGE": {
+        if (session.gameType === "camera_challenge") {
+          const subs = (nextState.data.submissions as Record<string, { submittedAt: number; ready: boolean }>) || {};
+          subs[playerId] = {
+            submittedAt: serverTimestamp,
+            ready: true,
+          };
+          nextState.data.submissions = subs;
+
+          const allPlayersSubmitted = nextSession.playerIds.every((pid) => subs[pid]?.ready);
+
+          if (allPlayersSubmitted || nextSession.playerIds.length <= 1) {
+            nextState.data.stage = "result";
+            nextState.status = "round_end";
+
+            // Award synergy points to both players
+            const points = 100;
+            for (const pid of nextSession.playerIds) {
+              nextState.scores[pid] = (nextState.scores[pid] || 0) + points;
+            }
+
+            const history = Array.isArray(nextState.data.roundHistory) ? [...nextState.data.roundHistory] : [];
+            const currentPrompt = nextState.data.currentPrompt as CameraChallengePrompt;
+            history.push({
+              round: nextState.currentRound,
+              promptId: currentPrompt?.id || "prompt",
+              promptTitle: currentPrompt?.title || "Challenge",
+              completedPlayerIds: Object.keys(subs),
+              serverTimestamp,
+            });
+            nextState.data.roundHistory = history;
+
+            if (nextState.currentRound >= nextState.maxRounds) {
+              createdResult = this.finalizeGame(nextSession, nextState, serverTimestamp);
+              nextState.status = "game_end";
+              nextState.data.stage = "result";
+              nextState.data.isGameEnd = true;
+            }
+
+            authoritativePayload = {
+              allSubmitted: true,
+              stage: "result",
+              scores: { ...nextState.scores },
+              pointsAwarded: points,
+              currentRound: nextState.currentRound,
+              isFinished: nextState.isFinished,
+            };
+          } else {
+            nextState.data.stage = "submit";
+            authoritativePayload = {
+              playerSubmitted: playerId,
+              stage: "submit",
+              waitingForPartner: true,
+            };
+          }
+        }
+        break;
+      }
+
+      case "SKIP_CHALLENGE": {
+        if (session.gameType === "camera_challenge") {
+          const currentIndex = Number(nextState.data.currentPromptIndex) || 0;
+          const nextIndex = (currentIndex + 1) % CAMERA_CHALLENGES.length;
+          const nextPrompt = CAMERA_CHALLENGES[nextIndex];
+
+          nextState.data.currentPromptIndex = nextIndex;
+          nextState.data.currentPrompt = nextPrompt;
+          nextState.data.stage = "challenge";
+          nextState.data.submissions = {};
+          nextState.data.stageStartedAtServer = serverTimestamp;
+          nextState.data.stageDeadlineServer = serverTimestamp + 60000;
+
+          const history = Array.isArray(nextState.data.roundHistory) ? [...nextState.data.roundHistory] : [];
+          history.push({
+            round: nextState.currentRound,
+            promptId: nextPrompt.id,
+            promptTitle: nextPrompt.title,
+            completedPlayerIds: [],
+            skipped: true,
+            serverTimestamp,
+          });
+          nextState.data.roundHistory = history;
+
+          authoritativePayload = {
+            skipped: true,
+            stage: "challenge",
+            prompt: nextPrompt,
+            currentRound: nextState.currentRound,
+          };
+        }
+        break;
+      }
+
+      case "NEXT_CHALLENGE": {
+        if (session.gameType === "camera_challenge") {
+          if (nextState.currentRound >= nextState.maxRounds) {
+            createdResult = this.finalizeGame(nextSession, nextState, serverTimestamp);
+            nextState.status = "game_end";
+            nextState.data.stage = "result";
+            nextState.data.isGameEnd = true;
+            authoritativePayload = { gameEnded: true, winnerId: nextState.winnerId };
+            break;
+          }
+
+          nextState.currentRound += 1;
+          const currentIndex = Number(nextState.data.currentPromptIndex) || 0;
+          const nextIndex = (currentIndex + 1) % CAMERA_CHALLENGES.length;
+          const nextPrompt = CAMERA_CHALLENGES[nextIndex];
+
+          nextState.data.currentPromptIndex = nextIndex;
+          nextState.data.currentPrompt = nextPrompt;
+          nextState.data.stage = "challenge";
+          nextState.data.submissions = {};
+          nextState.status = "playing";
+          nextState.roundStartedAtServer = serverTimestamp;
+          nextState.roundDeadlineServer = serverTimestamp + 60000;
+          nextState.data.stageStartedAtServer = serverTimestamp;
+          nextState.data.stageDeadlineServer = serverTimestamp + 60000;
+
+          authoritativePayload = {
+            round: nextState.currentRound,
+            stage: "challenge",
+            prompt: nextPrompt,
+          };
+        }
         break;
       }
 

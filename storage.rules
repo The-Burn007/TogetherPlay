@@ -7,6 +7,14 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function isPartnerOf(targetUid) {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(targetUid))
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(targetUid)).data.coupleId != null
+        && firestore.get(/databases/(default)/documents/users/$(targetUid)).data.coupleId == firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.coupleId;
+    }
+
     function isCoupleMember(coupleId) {
       return signedIn()
         && firestore.exists(
@@ -18,17 +26,19 @@ service firebase.storage {
     }
 
     match /users/{uid}/avatar/{fileName} {
-      allow read: if signedIn() && request.auth.uid == uid;
+      allow read: if signedIn() && (request.auth.uid == uid || isPartnerOf(uid));
 
+      // Limit file size to 5MB and strictly enforce safe image MIME types (SVG blocked to prevent stored XSS)
       allow write: if signedIn()
         && request.auth.uid == uid
         && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
     }
 
     match /couples/{coupleId}/memories/{fileName} {
       allow read: if isCoupleMember(coupleId);
 
+      // Require authentication and couple membership; enforce 15MB limit and safe MIME types
       allow write: if isCoupleMember(coupleId)
         && request.resource.size < 15 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png|webp)');

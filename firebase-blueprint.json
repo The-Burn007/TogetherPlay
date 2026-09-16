@@ -224,6 +224,81 @@
         }
       },
       "required": ["resultId", "gameId", "coupleId", "gameType", "playerIds", "durationSeconds", "totalRounds", "startedAt", "completedAt", "serverTimestamp"]
+    },
+    "CoupleMemory": {
+      "title": "CoupleMemory",
+      "description": "Private relationship memory artifact for couples, including photos, game moments, milestones, and notes",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique memory identifier"
+        },
+        "coupleId": {
+          "type": "string",
+          "description": "Couple ID owning this memory"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["photo", "game_moment", "milestone", "relationship_date", "note"]
+        },
+        "title": {
+          "type": "string",
+          "description": "Memory headline or title",
+          "maxLength": 120
+        },
+        "date": {
+          "type": "string",
+          "description": "ISO date string of the memory"
+        },
+        "dateLabel": {
+          "type": "string",
+          "description": "Formatted date label for timeline"
+        },
+        "context": {
+          "type": "string",
+          "description": "Intimate relationship context or location",
+          "maxLength": 600
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional detailed reflection or letters",
+          "maxLength": 3000
+        },
+        "gameActivity": {
+          "type": "object",
+          "description": "Associated game details if memory type is game_moment"
+        },
+        "media": {
+          "type": "object",
+          "description": "Private media metadata stored under couples/{coupleId}/memories/{fileName}"
+        },
+        "milestoneData": {
+          "type": "object",
+          "description": "Milestone details if memory type is milestone"
+        },
+        "relationshipDateData": {
+          "type": "object",
+          "description": "Relationship date details if memory type is relationship_date"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of author partner"
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Display name of author partner"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO update timestamp"
+        }
+      },
+      "required": ["id", "coupleId", "type", "title", "date", "context", "createdBy", "createdAt"]
     }
   },
   "firestore": {
@@ -246,6 +321,10 @@
     "/gameResults/{resultId}": {
       "schema": "GameResult",
       "description": "Durable completed game results (read-only for clients, server managed)"
+    },
+    "/couples/{coupleId}/memories/{memoryId}": {
+      "schema": "CoupleMemory",
+      "description": "Private couple visual archive and relationship memory artifacts"
     }
   }
 }

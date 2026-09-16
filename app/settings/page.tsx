@@ -26,14 +26,18 @@ import {
   KeyRound,
   LogOut,
   User,
+  Gamepad2,
+  Zap,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { useNotifications } from "@/lib/presence/useNotifications";
 import { useRouter } from "next/navigation";
 
 export default function SettingsPage() {
   const { showToast } = useToast();
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const { settings: notifSettings, updateSettings } = useNotifications();
   const [viewState, setViewState] = useState<"normal" | "loading" | "empty">("normal");
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -261,7 +265,132 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          {/* 3. Sanctuary Encryption & Passkey */}
+          {/* 3. Notification Settings (Game Activity, Challenges, Daily Moments) */}
+          <Card variant="raised" className="p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-subtle-border pb-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
+                <Bell className="w-4 h-4 text-shared-amber" />
+                <span>Partner Notification Channels</span>
+              </div>
+              <Badge variant="sage" size="sm">
+                Real-time Sync
+              </Badge>
+            </div>
+
+            <p className="text-xs text-on-surface-variant leading-relaxed">
+              Tailor the gentle alerts you receive when your partner interacts with your sanctuary across distances.
+            </p>
+
+            {/* A. Game Activity */}
+            <div className="flex items-center justify-between pt-1">
+              <div className="space-y-0.5 max-w-[80%]">
+                <div className="flex items-center gap-1.5">
+                  <Gamepad2 className="w-3.5 h-3.5 text-shared-amber" />
+                  <span className="text-xs font-medium text-on-surface">
+                    Game Activity
+                  </span>
+                </div>
+                <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                  Alerts when partner invites you to a match, starts a new game, or requests a rematch.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = !notifSettings.gameActivity;
+                  updateSettings({ gameActivity: nextVal });
+                  showToast({
+                    message: `Game activity notifications ${nextVal ? "enabled" : "muted"}`,
+                    variant: "info",
+                  });
+                }}
+                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                  notifSettings.gameActivity ? "bg-shared-amber" : "bg-surface-overlay"
+                }`}
+                aria-pressed={notifSettings.gameActivity}
+              >
+                <span
+                  className={`block w-4 h-4 rounded-full bg-surface-deep transition-transform absolute top-1 ${
+                    notifSettings.gameActivity ? "left-6" : "left-1"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* B. Challenges */}
+            <div className="flex items-center justify-between pt-2 border-t border-subtle-border/60">
+              <div className="space-y-0.5 max-w-[80%]">
+                <div className="flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-player-one-ember" />
+                  <span className="text-xs font-medium text-on-surface">
+                    Challenges
+                  </span>
+                </div>
+                <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                  Real-time toasts and drawer alerts when partner sends playful synchronous challenges.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = !notifSettings.challenges;
+                  updateSettings({ challenges: nextVal });
+                  showToast({
+                    message: `Challenge notifications ${nextVal ? "enabled" : "muted"}`,
+                    variant: "info",
+                  });
+                }}
+                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                  notifSettings.challenges ? "bg-shared-amber" : "bg-surface-overlay"
+                }`}
+                aria-pressed={notifSettings.challenges}
+              >
+                <span
+                  className={`block w-4 h-4 rounded-full bg-surface-deep transition-transform absolute top-1 ${
+                    notifSettings.challenges ? "left-6" : "left-1"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* C. Daily Moments */}
+            <div className="flex items-center justify-between pt-2 border-t border-subtle-border/60">
+              <div className="space-y-0.5 max-w-[80%]">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-player-two-sage" />
+                  <span className="text-xs font-medium text-on-surface">
+                    Daily Moments
+                  </span>
+                </div>
+                <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                  Shared daily spark prompts, newly archived memory milestones, and partner notes.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = !notifSettings.dailyMoments;
+                  updateSettings({ dailyMoments: nextVal });
+                  showToast({
+                    message: `Daily moments notifications ${nextVal ? "enabled" : "muted"}`,
+                    variant: "info",
+                  });
+                }}
+                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                  notifSettings.dailyMoments ? "bg-shared-amber" : "bg-surface-overlay"
+                }`}
+                aria-pressed={notifSettings.dailyMoments}
+              >
+                <span
+                  className={`block w-4 h-4 rounded-full bg-surface-deep transition-transform absolute top-1 ${
+                    notifSettings.dailyMoments ? "left-6" : "left-1"
+                  }`}
+                />
+              </button>
+            </div>
+          </Card>
+
+          {/* 4. Sanctuary Encryption & Passkey */}
           <Card variant="raised" className="p-5 space-y-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-on-surface border-b border-subtle-border pb-3">
               <Lock className="w-4 h-4 text-shared-amber" />

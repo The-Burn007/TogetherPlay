@@ -13,9 +13,10 @@ export interface HomeStateSelectorProps {
 const PRESET_OPTIONS: { id: HomePresetKey; label: string }[] = [
   { id: "live", label: "Live Firebase" },
   { id: "partner_online", label: "Partner Online" },
-  { id: "partner_offline", label: "Partner Offline" },
   { id: "partner_in_game", label: "Partner in Game" },
   { id: "partner_in_call", label: "Partner in Call" },
+  { id: "partner_away", label: "Partner Away" },
+  { id: "partner_offline", label: "Partner Offline" },
   { id: "no_previous_games", label: "No Previous Games" },
   { id: "no_memories", label: "No Memories" },
   { id: "new_couple", label: "New Couple" },

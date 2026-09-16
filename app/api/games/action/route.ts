@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { submitGameAction, ActionValidationError } from "@/lib/firebase/server/submitGameAction";
+import { extractAuthContext, checkApiRateLimit } from "@/lib/firebase/server/security";
 import type { GameAction } from "@/types/domain";
+
+export const dynamic = "force-dynamic";
 
 /**
  * Server-Side Authoritative Game Action API Route
@@ -12,19 +15,22 @@ import type { GameAction } from "@/types/domain";
  */
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization");
+    const authContext = extractAuthContext(request);
     const appCheckToken = request.headers.get("x-firebase-appcheck");
 
-    // Extract Bearer token or test UID from authorization header
-    let uid: string | undefined;
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      const token = authHeader.substring(7).trim();
-      // In production, token is decoded by Firebase Admin Auth.
-      // In test/dev environment, allows test tokens (e.g. "uid:user_alex" or "user_alex")
-      if (token.startsWith("uid:")) {
-        uid = token.replace("uid:", "");
-      } else if (token.length > 0) {
-        uid = token;
+    if (authContext) {
+      const rateLimit = checkApiRateLimit(`game_action_${authContext.uid}`, 120, 60000);
+      if (!rateLimit.allowed) {
+        return NextResponse.json(
+          {
+            accepted: false,
+            error: {
+              code: "RATE_LIMITED",
+              message: "Too many game actions sent. Please wait a moment.",
+            },
+          },
+          { status: 429, headers: { "Retry-After": String(rateLimit.resetInSeconds) } }
+        );
       }
     }
 
@@ -32,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     // Execute authoritative server function
     const result = await submitGameAction(body, {
-      auth: uid ? { uid } : null,
+      auth: authContext,
       appCheckToken,
       enforceAppCheck: process.env.NODE_ENV === "production",
       serverTimestamp: Date.now(),

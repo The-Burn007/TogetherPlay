@@ -8,6 +8,7 @@ export type HomePresetKey =
   | "partner_offline"
   | "partner_in_game"
   | "partner_in_call"
+  | "partner_away"
   | "no_previous_games"
   | "no_memories"
   | "new_couple";
@@ -27,7 +28,7 @@ export interface HomePartnerData {
   localTime: string;
   colorRole: "sage";
   avatarUrl?: string;
-  presenceState: "online" | "offline" | "in_game" | "in_call";
+  presenceState: "online" | "offline" | "in_game" | "in_call" | "away";
   lastActiveAgo?: string;
   weather?: string;
   activityDetail?: string;
@@ -297,6 +298,50 @@ export function getPresetHomeData(key: HomePresetKey, customUserName?: string): 
           actionLabel: "Rejoin Voice Call",
           actionHref: "/play",
           timeFormatted: "12:45",
+        },
+        todayChallenge: BASELINE_CHALLENGE,
+        continueGame: BASELINE_CONTINUE_GAME,
+        suggestedGame: BASELINE_SUGGESTED_GAME,
+        recentMemory: BASELINE_MEMORY,
+      };
+
+    case "partner_away":
+      return {
+        presetKey: "partner_away",
+        coupleId: "cpl_tokyo_london_4209",
+        daysTogether: 42,
+        distanceKm: 9560,
+        encryptionSeal: "End-to-End Encrypted Sanctuary",
+        greetingText: greeting,
+        presenceStatusHeadline: "Sam is away.",
+        presenceActionPrompt: "Leave a whisper?",
+        user: {
+          displayName: userName,
+          city: "London",
+          localTime: "23:24",
+          colorRole: "ember",
+          avatarUrl: "https://picsum.photos/seed/alex-profile-london/200/200",
+          weather: "Rainy · 9°C",
+        },
+        partner: {
+          displayName: "Sam",
+          city: "Tokyo",
+          localTime: "07:24",
+          colorRole: "sage",
+          avatarUrl: "https://picsum.photos/seed/sam-profile-tokyo/200/200",
+          presenceState: "away",
+          weather: "Clear · 18°C",
+          activityDetail: "Stepped away from screen",
+        },
+        currentActivity: {
+          type: "quiet",
+          title: "Sam is Away",
+          subtitle: "Sam stepped away a few moments ago. Leave a whisper or send a soft nudge.",
+          badgeLabel: "Away",
+          badgeVariant: "amber",
+          actionLabel: "Send Heartbeat Nudge",
+          actionHref: "/home",
+          timeFormatted: "Away",
         },
         todayChallenge: BASELINE_CHALLENGE,
         continueGame: BASELINE_CONTINUE_GAME,

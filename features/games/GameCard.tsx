@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
-import { Search, Compass, Camera, Sparkles, Brain, Video, Vibrate } from "lucide-react";
+import { Search, Compass, Camera, Sparkles, Brain, Video, Vibrate, Calendar } from "lucide-react";
 import type { GameType } from "@/types/domain";
 
 export interface GameCardProps {
@@ -32,17 +32,17 @@ export const GameCard: React.FC<GameCardProps> = ({
 }) => {
   const iconMap: Partial<Record<GameType, React.ComponentType<{ className?: string }>>> = {
     find_it_first: Search,
-    speed_duel: Sparkles,
+    speed_duel: Vibrate,
     couple_race: Compass,
     camera_challenge: Camera,
-    ai_host: Sparkles,
+    ai_host: Brain,
     know_me: Brain,
-    quick_questions: Sparkles,
-    ai_challenge: Sparkles,
-    ai_game_night: Sparkles,
+    quick_questions: Brain,
+    ai_challenge: Brain,
+    ai_game_night: Calendar,
   };
 
-  const Icon = iconMap[id] || Sparkles;
+  const Icon = iconMap[id] || Calendar;
 
   return (
     <Card

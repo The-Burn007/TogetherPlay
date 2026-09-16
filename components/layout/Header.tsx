@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { Sliders, Bell, Heart, Layers } from "lucide-react";
 import { DualPartnerPill } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toast";
+import { usePresence } from "@/lib/presence/usePresence";
+import { PartnerPresenceBadge } from "@/components/ui/PartnerPresenceBadge";
 
 export interface HeaderProps {
   onOpenNotifications?: () => void;
@@ -18,10 +20,18 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const pathname = usePathname();
   const { showToast } = useToast();
+  const {
+    partnerDisplayName,
+    partnerCity,
+    partnerState,
+    partnerConnection,
+    sendHeartbeatNudge,
+  } = usePresence();
 
-  const handlePartnerTap = () => {
+  const handlePartnerTap = async () => {
+    await sendHeartbeatNudge();
     showToast({
-      message: "Resonance heartbeat sent to Sam in Tokyo (24ms)",
+      message: `Resonance heartbeat sent to ${partnerDisplayName} in ${partnerCity} (24ms)`,
       variant: "nudge",
     });
   };
@@ -52,21 +62,15 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right: Partner Presence Beacon, Notifications & Settings */}
         <div className="flex items-center gap-2">
-          {/* Partner Quick Presence Status (Click to nudge) */}
-          <button
-            onClick={handlePartnerTap}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-raised hover:bg-surface-overlay border border-subtle-border hover:border-border-sage/40 transition-all text-xs select-none cursor-pointer"
-            title="Sam is online in Tokyo · Click to send heartbeat"
-          >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-player-two-sage opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-player-two-sage" />
-            </span>
-            <span className="text-[11px] font-medium text-on-surface hidden sm:inline">
-              Sam
-            </span>
-            <Heart className="w-3 h-3 text-player-one-ember/70 fill-player-one-ember/20 hover:fill-player-one-ember ml-0.5" />
-          </button>
+          {/* Partner Live Presence Status Badge */}
+          <PartnerPresenceBadge
+            partnerName={partnerDisplayName}
+            partnerCity={partnerCity}
+            state={partnerState}
+            connectionStatus={partnerConnection}
+            variant="compact"
+            onNudge={handlePartnerTap}
+          />
 
           {/* Whispers & Notifications Button */}
           {onOpenNotifications ? (

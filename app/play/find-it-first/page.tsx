@@ -24,11 +24,26 @@ import {
   RoundResultOverlay,
   FinalResultModal,
 } from "@/features/games/find-it-first/FlowComponents";
+import { GameRoomVideoCompanion } from "@/features/video/GameRoomVideoCompanion";
+import { usePresence } from "@/lib/presence/usePresence";
+import { useNotifications } from "@/lib/presence/useNotifications";
+import { PartnerPresenceBadge } from "@/components/ui/PartnerPresenceBadge";
 import type { GameSession, GameState } from "@/types/domain";
 
 export default function FindItFirstRoomPage() {
   const searchParams = useSearchParams();
   const { showToast } = useToast();
+  const { partnerDisplayName, partnerCity, partnerState, partnerConnection, setMyState } =
+    usePresence();
+  const { requestRematch } = useNotifications();
+
+  // Set presence to IN_GAME while in this room
+  useEffect(() => {
+    setMyState("IN_GAME", "Playing Find It First", "find_it_first");
+    return () => {
+      setMyState("ONLINE", "Browsing sanctuary");
+    };
+  }, [setMyState]);
 
   // Room & Identity setup
   const urlGameId = searchParams.get("gameId") || "fif_togetherplay_tabletop";
@@ -284,8 +299,9 @@ export default function FindItFirstRoomPage() {
         {},
         activePlayerId
       );
+      await requestRematch("find_it_first", "Find It First");
       if (soundEnabled) tabletopAudio.playRoundTransition();
-      showToast("Match restarted! Taking seats for Round 1...");
+      showToast("Match restarted! Rematch request delivered to partner.");
     } catch (err) {
       showToast((err as Error).message);
     } finally {
@@ -396,8 +412,27 @@ export default function FindItFirstRoomPage() {
             <Wifi className="w-3 h-3" />
             <span>24ms</span>
           </div>
+
+          <PartnerPresenceBadge
+            partnerName={partnerDisplayName}
+            partnerCity={partnerCity}
+            state={partnerState}
+            connectionStatus={partnerConnection}
+            variant="compact"
+          />
         </div>
       </div>
+
+      {/* Supporting Surface: Two-Person WebRTC Video Companion (P2P, Zero Recording, Non-blocking) */}
+      <GameRoomVideoCompanion
+        roomId={urlGameId}
+        myUserId={activePlayerId}
+        partnerId={activePlayerId === "user_alex" ? "user_sam" : "user_alex"}
+        myDisplayName={activePlayerId === "user_alex" ? "Alex" : "Sam"}
+        myCity={activePlayerId === "user_alex" ? "London" : "Tokyo"}
+        partnerDisplayName={activePlayerId === "user_alex" ? "Sam" : "Alex"}
+        partnerCity={activePlayerId === "user_alex" ? "Tokyo" : "London"}
+      />
 
       {/* Main Tabletop Arena */}
       {currentStatus === "ready" || currentStatus === "waiting" ? (

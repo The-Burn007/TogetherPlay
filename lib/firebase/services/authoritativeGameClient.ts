@@ -14,7 +14,7 @@
 import { ref, onValue, off } from "firebase/database";
 import { doc, onSnapshot } from "firebase/firestore";
 import { rtdb, db, auth } from "../client";
-import type { GameAction, GameActionResult, GameState, GameSession, GameActionType } from "@/types/domain";
+import type { GameAction, GameActionResult, GameState, GameSession, GameActionType, GameType } from "@/types/domain";
 
 export class AuthoritativeGameClient {
   /**
@@ -118,7 +118,7 @@ export class AuthoritativeGameClient {
       headers["Authorization"] = `Bearer ${token}`;
     } else if (auth.currentUser?.uid) {
       headers["Authorization"] = `Bearer uid:${auth.currentUser.uid}`;
-    } else {
+    } else if (process.env.NODE_ENV !== "production") {
       headers["Authorization"] = "Bearer uid:user_alex";
     }
 
@@ -161,7 +161,8 @@ export class AuthoritativeGameClient {
   async ensureGameSession(
     gameId: string,
     playerIds: string[] = ["user_alex", "user_sam"],
-    resetIfFinished = false
+    resetIfFinished = false,
+    gameType: GameType = "find_it_first"
   ): Promise<{ session: GameSession; state: GameState }> {
     const res = await fetch("/api/games/session", {
       method: "POST",
@@ -169,7 +170,7 @@ export class AuthoritativeGameClient {
       body: JSON.stringify({
         gameId,
         playerIds,
-        gameType: "find_it_first",
+        gameType,
         resetIfFinished,
       }),
     });

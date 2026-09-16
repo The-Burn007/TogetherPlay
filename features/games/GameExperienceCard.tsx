@@ -316,7 +316,7 @@ export const GameExperienceCard: React.FC<GameExperienceCardProps> = ({
               </button>
             </div>
             <div className="p-2.5 rounded-lg bg-surface-container/50 border border-shared-amber/20 text-xs text-canvas-sand/90 italic min-h-[44px] flex items-center">
-              <span dangerouslySetInnerHTML={{ __html: aiPrompts[aiPromptIndex] }} />
+              <span>{aiPrompts[aiPromptIndex]}</span>
             </div>
           </div>
         )}
@@ -326,28 +326,32 @@ export const GameExperienceCard: React.FC<GameExperienceCardProps> = ({
           <div className="rounded-xl bg-surface-deep border border-shared-amber/40 p-3.5 flex flex-col space-y-2.5">
             <div className="flex items-center justify-between text-[10px] font-mono">
               <span className="text-shared-amber font-semibold flex items-center gap-1">
-                <Sparkles className="w-3 h-3" />
-                Curated 4-Round Game Show
+                <Compass className="w-3 h-3" />
+                Curated 5-Round Sequence
               </span>
-              <span className="text-player-two-sage">AI Host Standing By</span>
+              <span className="text-player-two-sage">Private Host Standing By</span>
             </div>
-            {/* 4 Interactive Round Timeline */}
-            <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] font-mono">
+            {/* 5 Interactive Round Timeline */}
+            <div className="grid grid-cols-5 gap-1 text-center text-[10px] font-mono">
               <div className="p-1.5 rounded bg-surface-container border border-subtle-border">
                 <div className="text-shared-amber font-bold">R1</div>
-                <div className="text-[9px] text-on-surface-variant truncate">Lore Trivia</div>
+                <div className="text-[8px] text-on-surface-variant truncate">Find It</div>
               </div>
               <div className="p-1.5 rounded bg-surface-container border border-subtle-border">
                 <div className="text-player-one-ember font-bold">R2</div>
-                <div className="text-[9px] text-on-surface-variant truncate">Audio Clue</div>
+                <div className="text-[8px] text-on-surface-variant truncate">Question</div>
               </div>
               <div className="p-1.5 rounded bg-surface-container border border-subtle-border">
                 <div className="text-player-two-sage font-bold">R3</div>
-                <div className="text-[9px] text-on-surface-variant truncate">Photo Duel</div>
+                <div className="text-[8px] text-on-surface-variant truncate">Camera</div>
+              </div>
+              <div className="p-1.5 rounded bg-surface-container border border-subtle-border">
+                <div className="text-shared-amber font-bold">R4</div>
+                <div className="text-[8px] text-on-surface-variant truncate">Speed</div>
               </div>
               <div className="p-1.5 rounded bg-surface-container border border-shared-amber/40 bg-shared-amber/10">
-                <div className="text-shared-amber font-bold">R4</div>
-                <div className="text-[9px] text-shared-amber truncate">Synchrony</div>
+                <div className="text-shared-amber font-bold">R5</div>
+                <div className="text-[8px] text-shared-amber truncate">Finale</div>
               </div>
             </div>
           </div>

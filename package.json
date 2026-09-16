@@ -13,6 +13,7 @@
     "test:security": "vitest run tests/security"
   },
   "dependencies": {
+    "@google/genai": "^2.22.0",
     "@tailwindcss/postcss": "^4.3.3",
     "clsx": "^2.1.1",
     "firebase": "^12.0.0",

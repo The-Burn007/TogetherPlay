@@ -3,6 +3,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Global Safety Net (Pillar 1): Default Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
     function signedIn() {
       return request.auth != null;
     }
@@ -35,9 +40,11 @@ service cloud.firestore {
       // User can read own profile or their connected partner's profile
       allow read: if isSelf(uid) || isPartnerOf(uid);
       allow create: if isSelf(uid)
-        && request.resource.data.uid == request.auth.uid;
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'email', 'photoURL', 'coupleId', 'timezone', 'createdAt', 'lastActiveAt', 'status']);
       allow update: if isSelf(uid)
-        && request.resource.data.uid == resource.data.uid;
+        && request.resource.data.uid == resource.data.uid
+        && (!('role' in request.resource.data) || request.resource.data.role == resource.data.role);
       allow delete: if isSelf(uid);
     }
 
@@ -54,41 +61,19 @@ service cloud.firestore {
         && request.resource.data.memberIds[0] == request.auth.uid
         && request.resource.data.status == "active";
 
-      // Updates:
-      // Branch 1: Existing member updating non-membership settings
-      // Branch 2: Second partner joining with invitation
-      // Enforces:
-      // - A couple must never contain more than two members
-      // - A user cannot add arbitrary third-party users (can only add self)
-      allow update: if (
-        // Branch 1: Couple member updating settings (membership immutable)
-        (
-          isCoupleMember(coupleId)
-          && request.resource.data.memberIds == resource.data.memberIds
-          && request.resource.data.ownerId == resource.data.ownerId
-          && request.resource.data.coupleId == resource.data.coupleId
-        )
-        ||
-        // Branch 2: Partner accepting invitation and joining
-        (
-          signedIn()
-          && resource.data.memberIds.size() == 1
-          && request.resource.data.memberIds.size() == 2
-          && request.resource.data.memberIds[0] == resource.data.memberIds[0]
-          && request.resource.data.memberIds[1] == request.auth.uid
-          && !(request.auth.uid in resource.data.memberIds)
-          && request.resource.data.ownerId == resource.data.ownerId
-          && request.resource.data.coupleId == resource.data.coupleId
-          && request.resource.data.createdAt == resource.data.createdAt
-          && request.resource.data.status == "active"
-        )
-      );
+      // Updates: Existing couple member updating settings
+      // SECURITY MANDATE: memberIds is strictly IMMUTABLE from client updates.
+      // Partner joining is handled exclusively by authoritative server transaction via /api/couples/accept-invite.
+      allow update: if isCoupleMember(coupleId)
+        && request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.coupleId == resource.data.coupleId;
 
       allow delete: if false;
     }
 
     match /coupleInvites/{inviteId} {
-      // User can fetch an invite to preview/accept; list restricted to inviter
+      // User can fetch an invite to preview; list restricted to inviter
       allow get: if signedIn();
       allow list: if signedIn()
         && resource.data.inviterId == request.auth.uid;
@@ -104,23 +89,17 @@ service cloud.firestore {
         && request.resource.data.status == "pending"
         && isCoupleMember(request.resource.data.coupleId);
 
-      allow update: if signedIn() && (
-        // Inviter can revoke
-        (resource.data.inviterId == request.auth.uid
-          && request.resource.data.status == "revoked"
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
-        ||
-        // Partner accepting invite
-        (resource.data.status == "pending"
-          && request.resource.data.status == "accepted"
-          && request.resource.data.acceptedBy == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedBy']))
-      );
+      // Inviter can revoke their pending invite; partner joining runs via authoritative server
+      allow update: if signedIn()
+        && resource.data.inviterId == request.auth.uid
+        && request.resource.data.status == "revoked"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
 
       allow delete: if false;
     }
 
     match /games/{gameId} {
+      // Direct game state mutation is forbidden: client cannot modify game state directly
       allow read: if signedIn()
         && request.auth.uid in resource.data.playerIds;
       allow create, update, delete: if false;
@@ -143,18 +122,14 @@ service cloud.firestore {
     match /couples/{coupleId}/memories/{memoryId} {
       allow read: if isCoupleMember(coupleId);
       allow create: if isCoupleMember(coupleId)
-        && request.resource.data.createdBy == request.auth.uid;
-      allow update, delete: if isCoupleMember(coupleId)
-        && resource.data.createdBy == request.auth.uid;
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.coupleId == coupleId;
+      allow update, delete: if isCoupleMember(coupleId);
     }
 
     match /couples/{coupleId}/aiChallenges/{challengeId} {
       allow read: if isCoupleMember(coupleId);
       allow write: if false;
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
     }
   }
 }

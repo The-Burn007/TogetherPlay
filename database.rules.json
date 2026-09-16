@@ -9,7 +9,43 @@
     "presence": {
       "$uid": {
         ".read": "auth != null",
-        ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "!newData.hasChildren(['lat', 'lng', 'latitude', 'longitude', 'location', 'gps', 'coordinates'])"
+      }
+    },
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && newData.child('fromUserId').val() === auth.uid && newData.child('toUserId').val() === $uid",
+        ".validate": "newData.hasChildren(['id', 'type', 'title', 'body', 'timestamp']) && newData.child('title').isString() && newData.child('title').val().length <= 120 && newData.child('body').isString() && newData.child('body').val().length <= 500"
+      }
+    },
+    "webrtc_signaling": {
+      "$roomId": {
+        ".read": "auth != null",
+        "participants": {
+          "$userId": {
+            ".write": "auth != null && auth.uid === $userId",
+            ".validate": "newData.hasChildren(['userId', 'joinedAt']) && newData.child('userId').val() === $userId"
+          }
+        },
+        "offers": {
+          "$toUserId": {
+            ".write": "auth != null && newData.child('fromUserId').val() === auth.uid",
+            ".validate": "newData.hasChildren(['type', 'sdp', 'fromUserId', 'toUserId']) && newData.child('type').val() === 'offer' && newData.child('toUserId').val() === $toUserId"
+          }
+        },
+        "answers": {
+          "$toUserId": {
+            ".write": "auth != null && newData.child('fromUserId').val() === auth.uid",
+            ".validate": "newData.hasChildren(['type', 'sdp', 'fromUserId', 'toUserId']) && newData.child('type').val() === 'answer' && newData.child('toUserId').val() === $toUserId"
+          }
+        },
+        "candidates": {
+          "$toUserId": {
+            ".write": "auth != null && (!newData.exists() || newData.child('fromUserId').val() === auth.uid || data.child('fromUserId').val() === auth.uid)"
+          }
+        }
       }
     },
     ".read": false,

@@ -30,6 +30,7 @@ export type ActionErrorCode =
   | "PLAYER_NOT_IN_GAME"
   | "GAME_NOT_ACTIVE"
   | "INVALID_ACTION"
+  | "INVALID_ACTION_TYPE"
   | "ACTION_DISALLOWED_FOR_STATE"
   | "INTERNAL_ERROR";
 
@@ -272,13 +273,26 @@ function validateActionStateAllowed(
     }
 
     case "ROLL_DICE":
+    case "MOVE":
+    case "USE_POWER":
+    case "END_TURN":
     case "SELECT_CELL":
     case "SUBMIT_ANSWER":
-    case "SUBMIT_REACTION": {
+    case "SUBMIT_REACTION":
+    case "TRIGGER_TARGET": {
       if (currentStatus !== "playing") {
         throw new ActionValidationError(
           "ACTION_DISALLOWED_FOR_STATE",
           `Gameplay action '${action.type}' is only allowed during 'playing' state, but current state is '${currentStatus}'.`,
+          400
+        );
+      }
+
+      // If game is paused, reject gameplay actions until resumed
+      if (state.data?.isPaused) {
+        throw new ActionValidationError(
+          "ACTION_DISALLOWED_FOR_STATE",
+          "Game is currently paused. Resume before submitting gameplay actions.",
           400
         );
       }
@@ -292,8 +306,12 @@ function validateActionStateAllowed(
         );
       }
 
-      // Check turn order if turn-based
-      if (action.type === "ROLL_DICE" && state.turnPlayerId && state.turnPlayerId !== playerId) {
+      // Check turn order for turn-based actions
+      if (
+        (action.type === "ROLL_DICE" || action.type === "MOVE" || action.type === "END_TURN") &&
+        state.turnPlayerId &&
+        state.turnPlayerId !== playerId
+      ) {
         throw new ActionValidationError(
           "ACTION_DISALLOWED_FOR_STATE",
           `It is not player '${playerId}'s turn (current turn: '${state.turnPlayerId}').`,
@@ -303,11 +321,64 @@ function validateActionStateAllowed(
       break;
     }
 
+    case "PAUSE_GAME": {
+      if (currentStatus !== "playing") {
+        throw new ActionValidationError(
+          "ACTION_DISALLOWED_FOR_STATE",
+          `Cannot pause game when status is '${currentStatus}'.`,
+          400
+        );
+      }
+      break;
+    }
+
+    case "RESUME_GAME": {
+      if (currentStatus !== "playing") {
+        throw new ActionValidationError(
+          "ACTION_DISALLOWED_FOR_STATE",
+          `Cannot resume game when status is '${currentStatus}'.`,
+          400
+        );
+      }
+      break;
+    }
+
+    case "PLAYER_DISCONNECT":
+    case "PLAYER_RECONNECT": {
+      // Always permitted to track network connection lifecycle
+      break;
+    }
+
     case "NEXT_ROUND": {
       if (currentStatus !== "round_end" && currentStatus !== "playing") {
         throw new ActionValidationError(
           "ACTION_DISALLOWED_FOR_STATE",
           `Action 'NEXT_ROUND' is only allowed after a round ends, but current status is '${currentStatus}'.`,
+          400
+        );
+      }
+      break;
+    }
+
+    case "SUBMIT_CAMERA_CHALLENGE":
+    case "START_COUNTDOWN":
+    case "START_PERFORM":
+    case "SKIP_CHALLENGE": {
+      if (currentStatus !== "playing" && currentStatus !== "round_end") {
+        throw new ActionValidationError(
+          "ACTION_DISALLOWED_FOR_STATE",
+          `Camera challenge action '${action.type}' is only allowed during active gameplay, but current status is '${currentStatus}'.`,
+          400
+        );
+      }
+      break;
+    }
+
+    case "NEXT_CHALLENGE": {
+      if (currentStatus !== "round_end" && currentStatus !== "playing") {
+        throw new ActionValidationError(
+          "ACTION_DISALLOWED_FOR_STATE",
+          `Action 'NEXT_CHALLENGE' is only allowed after a challenge completes, but current status is '${currentStatus}'.`,
           400
         );
       }
@@ -337,8 +408,39 @@ function validateActionStateAllowed(
       break;
     }
 
-    default:
-      // Allow general lifecycle or recognized extension actions
+    default: {
+      const recognized = [
+        "READY",
+        "START_GAME",
+        "ROLL_DICE",
+        "MOVE",
+        "USE_POWER",
+        "END_TURN",
+        "PAUSE_GAME",
+        "RESUME_GAME",
+        "PLAYER_DISCONNECT",
+        "PLAYER_RECONNECT",
+        "SELECT_CELL",
+        "SUBMIT_ANSWER",
+        "NEXT_ROUND",
+        "REMATCH",
+        "TRIGGER_TARGET",
+        "SUBMIT_REACTION",
+        "START_COUNTDOWN",
+        "START_PERFORM",
+        "SUBMIT_CAMERA_CHALLENGE",
+        "SKIP_CHALLENGE",
+        "NEXT_CHALLENGE",
+        "END_GAME",
+      ];
+      if (!recognized.includes(action.type)) {
+        throw new ActionValidationError(
+          "INVALID_ACTION_TYPE",
+          `Unrecognized action type '${action.type}'. Action is not permitted.`,
+          400
+        );
+      }
       break;
+    }
   }
 }

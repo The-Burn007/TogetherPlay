@@ -30,6 +30,9 @@ import { Badge } from "@/components/ui/Badge";
 import { Avatar } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toast";
 import { TOGETHERPLAY_GAMES } from "@/features/games/gameCatalog";
+import { usePresence } from "@/lib/presence/usePresence";
+import { useNotifications } from "@/lib/presence/useNotifications";
+import { PartnerPresenceBadge } from "@/components/ui/PartnerPresenceBadge";
 import type { GameType } from "@/types/domain";
 import type { LobbyFlowState } from "./types";
 import { useMultiplayerLobby } from "./useMultiplayerLobby";
@@ -42,6 +45,8 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
   initialGameId = "find_it_first",
 }) => {
   const { showToast } = useToast();
+  const { partnerState, partnerConnection, partnerDisplayName, partnerCity } = usePresence();
+  const { invitePartner, notifyGameStarted } = useNotifications();
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
 
   const {
@@ -65,10 +70,11 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
     returnToLobby,
   } = useMultiplayerLobby(initialGameId);
 
-  const handleSendNudge = () => {
+  const handleSendNudge = async () => {
     sendPartnerWhisper("Alex is waiting in the game lobby for you!");
+    await invitePartner(selectedGame.id, selectedGame.title);
     showToast({
-      message: "Gentle whisper delivered to Sam's phone in Tokyo",
+      message: `Whisper & invitation to play ${selectedGame.title} delivered to Sam in Tokyo`,
       variant: "nudge",
     });
   };
@@ -371,19 +377,28 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
               </div>
             </div>
 
-            {/* Connection / Latency */}
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-deep border border-subtle-border text-[10px] font-mono text-on-surface-variant">
-              {playerB.isInLobby && lobbyState !== "disconnected" ? (
-                <>
-                  <Wifi className="w-3 h-3 text-player-two-sage" />
-                  <span>{playerB.latencyMs}ms</span>
-                </>
-              ) : (
-                <>
-                  <WifiOff className="w-3 h-3 text-on-surface-variant/50" />
-                  <span>Offline</span>
-                </>
-              )}
+            {/* Connection / Latency & Real-time Presence */}
+            <div className="flex items-center gap-2">
+              <PartnerPresenceBadge
+                partnerName={partnerDisplayName || playerB.name}
+                partnerCity={partnerCity || playerB.city}
+                state={partnerState}
+                connectionStatus={partnerConnection}
+                variant="compact"
+              />
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-deep border border-subtle-border text-[10px] font-mono text-on-surface-variant">
+                {playerB.isInLobby && lobbyState !== "disconnected" ? (
+                  <>
+                    <Wifi className="w-3 h-3 text-player-two-sage" />
+                    <span>{playerB.latencyMs}ms</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="w-3 h-3 text-on-surface-variant/50" />
+                    <span>Offline</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -606,6 +621,20 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
                 <Button variant="amber" size="md">
                   <Play className="w-4 h-4 mr-2 fill-current" />
                   Enter Active Arena
+                </Button>
+              </Link>
+            ) : selectedGame.id === "speed_duel" ? (
+              <Link href="/play/speed-duel">
+                <Button variant="amber" size="md">
+                  <Play className="w-4 h-4 mr-2 fill-current" />
+                  Enter Speed Duel Arena
+                </Button>
+              </Link>
+            ) : selectedGame.id === "couple_race" ? (
+              <Link href="/play/couple-race">
+                <Button variant="amber" size="md">
+                  <Play className="w-4 h-4 mr-2 fill-current" />
+                  Enter Meridian Tabletop
                 </Button>
               </Link>
             ) : (

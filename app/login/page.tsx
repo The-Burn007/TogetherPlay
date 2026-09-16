@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
@@ -21,21 +21,61 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
+function sanitizeRedirectUrl(url: string | null): string {
+  if (!url || typeof url !== "string") return "/home";
+  const trimmed = url.trim();
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.startsWith("/\\")) {
+    return trimmed;
+  }
+  return "/home";
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signInWithEmail, signInWithGoogle, isAuthenticated, isLoading } = useAuth();
+  const { signInWithEmail, signInWithGoogle, signInAsTestUser, isAuthenticated, isLoading } = useAuth();
   const { showToast } = useToast();
 
-  const redirectUrl = searchParams.get("redirect") || "/home";
+  const redirectUrl = sanitizeRedirectUrl(searchParams.get("redirect"));
   const reason = searchParams.get("reason");
+  const autoBypass = searchParams.get("bypass") === "true";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const [isBypassing, setIsBypassing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleBypassTestUser = useCallback(
+    async (preset: "alex" | "sam" = "alex") => {
+      setIsBypassing(true);
+      try {
+        await signInAsTestUser(preset);
+        showToast({
+          message: `Entered test mode as ${preset === "alex" ? "Alex (London)" : "Sam (Tokyo)"}.`,
+          variant: "success",
+        });
+        router.replace(redirectUrl);
+      } catch {
+        showToast({
+          message: "Failed to initialize test mode.",
+          variant: "error",
+        });
+      } finally {
+        setIsBypassing(false);
+      }
+    },
+    [signInAsTestUser, showToast, router, redirectUrl]
+  );
+
+  // Auto-bypass if requested via ?bypass=true query param
+  useEffect(() => {
+    if (autoBypass && !isAuthenticated) {
+      handleBypassTestUser("alex");
+    }
+  }, [autoBypass, isAuthenticated, handleBypassTestUser]);
 
   // If already logged in, redirect away from login
   useEffect(() => {
@@ -132,13 +172,68 @@ function LoginForm() {
         </div>
       )}
 
+      {/* Quick Test / QA Bypass Banner (Development only) */}
+      {process.env.NODE_ENV !== "production" && (
+        <div className="mb-5 p-4 rounded-2xl bg-amber-950/20 border border-amber-500/30 text-left space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-ping" />
+              <span className="text-xs font-semibold text-amber-400 tracking-wide uppercase font-mono">
+                Quick Test Sandbox
+              </span>
+            </div>
+            <span className="text-[11px] text-amber-300/80 font-mono">
+              Bypass Auth
+            </span>
+          </div>
+          <p className="text-xs text-neutral-300 leading-relaxed">
+            Skip login and immediately enter the app as either partner to test games, video, and presence rituals.
+          </p>
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <Button
+              type="button"
+              variant="amber"
+              size="sm"
+              onClick={() => handleBypassTestUser("alex")}
+              isLoading={isBypassing}
+              className="w-full text-xs justify-center font-medium"
+            >
+              <span>Test as Alex (P1)</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleBypassTestUser("sam")}
+              isLoading={isBypassing}
+              className="w-full text-xs justify-center font-medium border-emerald-500/40 text-emerald-400 hover:bg-emerald-950/30"
+            >
+              <span>Test as Sam (P2)</span>
+            </Button>
+          </div>
+        </div>
+      )}
+
       {errorMessage && (
         <div
           role="alert"
-          className="mb-4 p-3 rounded-lg bg-status-error/10 border border-status-error/30 flex items-start gap-2.5 text-xs text-status-error"
+          className="mb-4 p-3 rounded-lg bg-status-error/10 border border-status-error/30 space-y-2 text-xs text-status-error"
         >
-          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <p className="leading-relaxed">{errorMessage}</p>
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <p className="leading-relaxed">{errorMessage}</p>
+          </div>
+          {process.env.NODE_ENV !== "production" && (
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => handleBypassTestUser("alex")}
+                className="text-amber-400 underline font-medium hover:text-amber-300 text-xs cursor-pointer"
+              >
+                Click here to bypass login and enter in Test Mode instead →
+              </button>
+            </div>
+          )}
         </div>
       )}
 

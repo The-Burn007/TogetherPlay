@@ -9,6 +9,7 @@ import { NotificationDrawer } from "./NotificationDrawer";
 import { PageTransition } from "./PageTransition";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { useNotifications } from "@/lib/presence/useNotifications";
 
 const PUBLIC_AUTH_ROUTES = ["/login", "/register", "/forgot-password"];
 const PUBLIC_EXTRA_ROUTES = ["/design-system", "/onboarding/invite"];
@@ -20,7 +21,8 @@ export interface AppShellProps {
 export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { isLoading, isAuthenticated } = useAuth();
+  const { isLoading, isAuthenticated, isTestMode, user, signInAsTestUser, signOut } = useAuth();
+  const { unreadCount } = useNotifications();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
   const isAuthRoute = PUBLIC_AUTH_ROUTES.includes(pathname);
@@ -29,6 +31,12 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
   useEffect(() => {
     if (isLoading) return;
+
+    // Direct URL parameter bypass
+    if (!isAuthenticated && typeof window !== "undefined" && window.location.search.includes("bypass=true")) {
+      signInAsTestUser("alex");
+      return;
+    }
 
     // 1. If user is unauthenticated and attempting to access a protected route
     if (!isAuthenticated && !isPublicRoute) {
@@ -41,7 +49,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     if (isAuthenticated && isAuthRoute) {
       router.replace("/home");
     }
-  }, [isLoading, isAuthenticated, isPublicRoute, isAuthRoute, pathname, router]);
+  }, [isLoading, isAuthenticated, isPublicRoute, isAuthRoute, pathname, router, signInAsTestUser]);
 
   // Loading state while Firebase restores the auth session from IndexedDB/cookies
   if (isLoading) {
@@ -96,38 +104,79 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
   // Authenticated Application Shell
   return (
-    <div className="relative min-h-screen w-full bg-surface-deep text-on-surface flex">
-      {/* 1. Desktop Refined Side Rail */}
-      <DesktopRail
-        onOpenNotifications={() => setIsNotificationOpen(true)}
-        unreadCount={2}
-      />
+    <div className="relative min-h-screen w-full bg-surface-deep text-on-surface flex flex-col">
+      {/* Test Mode Sandbox Ribbon (Development only) */}
+      {isTestMode && process.env.NODE_ENV !== "production" && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-300 md:pl-24 lg:pl-64 z-20">
+          <div className="flex items-center space-x-2">
+            <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+            <span className="font-mono font-semibold text-amber-400">TEST MODE</span>
+            <span className="text-neutral-500">·</span>
+            <span>
+              Active partner:{" "}
+              <strong className="text-neutral-100">
+                {user?.displayName || "Alex"}
+              </strong>{" "}
+              <span className="text-neutral-400 font-mono text-[11px]">
+                ({user?.uid === "user_sam" ? "Tokyo" : "London"})
+              </span>
+            </span>
+          </div>
+          <div className="flex items-center space-x-3">
+            <button
+              type="button"
+              onClick={() =>
+                signInAsTestUser(user?.uid === "user_alex" ? "sam" : "alex")
+              }
+              className="text-amber-400 hover:text-amber-300 underline font-mono text-[11px] cursor-pointer"
+            >
+              Switch to {user?.uid === "user_alex" ? "Sam (P2)" : "Alex (P1)"}
+            </button>
+            <span className="text-neutral-600">|</span>
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className="text-neutral-400 hover:text-neutral-200 text-[11px] cursor-pointer"
+            >
+              Exit Test Mode
+            </button>
+          </div>
+        </div>
+      )}
 
-      {/* 2. Main Viewport & Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 transition-all duration-200">
-        {/* Top Header */}
-        <Header
+      <div className="flex-1 flex">
+        {/* 1. Desktop Refined Side Rail */}
+        <DesktopRail
           onOpenNotifications={() => setIsNotificationOpen(true)}
-          unreadCount={2}
+          unreadCount={unreadCount}
         />
 
-        {/* Responsive Content Area with Smooth Page Transitions */}
-        <main
-          id="main-content"
-          className="flex-1 flex flex-col w-full md:pl-20 lg:pl-60"
-        >
-          <PageTransition>{children}</PageTransition>
-        </main>
+        {/* 2. Main Viewport & Content Area */}
+        <div className="flex-1 flex flex-col min-w-0 transition-all duration-200">
+          {/* Top Header */}
+          <Header
+            onOpenNotifications={() => setIsNotificationOpen(true)}
+            unreadCount={unreadCount}
+          />
+
+          {/* Responsive Content Area with Smooth Page Transitions */}
+          <main
+            id="main-content"
+            className="flex-1 flex flex-col w-full md:pl-20 lg:pl-60"
+          >
+            <PageTransition>{children}</PageTransition>
+          </main>
+        </div>
+
+        {/* 3. Mobile Bottom Navigation */}
+        <BottomNav />
+
+        {/* 4. Private Couple Whispers & Notification Drawer */}
+        <NotificationDrawer
+          isOpen={isNotificationOpen}
+          onClose={() => setIsNotificationOpen(false)}
+        />
       </div>
-
-      {/* 3. Mobile Bottom Navigation */}
-      <BottomNav />
-
-      {/* 4. Private Couple Whispers & Notification Drawer */}
-      <NotificationDrawer
-        isOpen={isNotificationOpen}
-        onClose={() => setIsNotificationOpen(false)}
-      />
     </div>
   );
 };

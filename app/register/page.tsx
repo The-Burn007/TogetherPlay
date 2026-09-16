@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
@@ -23,7 +23,7 @@ import {
 
 function RegisterForm() {
   const router = useRouter();
-  const { signUpWithEmail, signInWithGoogle, isAuthenticated, isLoading } = useAuth();
+  const { signUpWithEmail, signInWithGoogle, signInAsTestUser, isAuthenticated, isLoading } = useAuth();
   const { showToast } = useToast();
 
   const [displayName, setDisplayName] = useState("");
@@ -33,6 +33,7 @@ function RegisterForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const [isBypassing, setIsBypassing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // If already logged in, redirect away from register
@@ -41,6 +42,28 @@ function RegisterForm() {
       router.replace("/home");
     }
   }, [isLoading, isAuthenticated, router]);
+
+  const handleBypassTestUser = useCallback(
+    async (preset: "alex" | "sam" = "alex") => {
+      setIsBypassing(true);
+      try {
+        await signInAsTestUser(preset, displayName.trim() || undefined);
+        showToast({
+          message: `Entered test mode as ${preset === "alex" ? (displayName.trim() || "Alex") : "Sam"}.`,
+          variant: "success",
+        });
+        router.replace("/home");
+      } catch {
+        showToast({
+          message: "Failed to initialize test mode.",
+          variant: "error",
+        });
+      } finally {
+        setIsBypassing(false);
+      }
+    },
+    [signInAsTestUser, displayName, showToast, router]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,13 +153,68 @@ function RegisterForm() {
         </p>
       </div>
 
+      {/* Quick Test / QA Bypass Banner (Development only) */}
+      {process.env.NODE_ENV !== "production" && (
+        <div className="mb-5 p-4 rounded-2xl bg-amber-950/20 border border-amber-500/30 text-left space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-ping" />
+              <span className="text-xs font-semibold text-amber-400 tracking-wide uppercase font-mono">
+                Quick Test Sandbox
+              </span>
+            </div>
+            <span className="text-[11px] text-amber-300/80 font-mono">
+              Bypass Auth
+            </span>
+          </div>
+          <p className="text-xs text-neutral-300 leading-relaxed">
+            Skip registration and test the app immediately as either partner to explore games, video, and presence rituals.
+          </p>
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <Button
+              type="button"
+              variant="amber"
+              size="sm"
+              onClick={() => handleBypassTestUser("alex")}
+              isLoading={isBypassing}
+              className="w-full text-xs justify-center font-medium"
+            >
+              <span>Test as Alex (P1)</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleBypassTestUser("sam")}
+              isLoading={isBypassing}
+              className="w-full text-xs justify-center font-medium border-emerald-500/40 text-emerald-400 hover:bg-emerald-950/30"
+            >
+              <span>Test as Sam (P2)</span>
+            </Button>
+          </div>
+        </div>
+      )}
+
       {errorMessage && (
         <div
           role="alert"
-          className="mb-4 p-3 rounded-lg bg-status-error/10 border border-status-error/30 flex items-start gap-2.5 text-xs text-status-error"
+          className="mb-4 p-3 rounded-lg bg-status-error/10 border border-status-error/30 space-y-2 text-xs text-status-error"
         >
-          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <p className="leading-relaxed">{errorMessage}</p>
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <p className="leading-relaxed">{errorMessage}</p>
+          </div>
+          {process.env.NODE_ENV !== "production" && (
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => handleBypassTestUser("alex")}
+                className="text-amber-400 underline font-medium hover:text-amber-300 text-xs cursor-pointer"
+              >
+                Click here to bypass signup and enter in Test Mode instead →
+              </button>
+            </div>
+          )}
         </div>
       )}
 

@@ -22,12 +22,30 @@ import {
   Bell,
   CheckCircle2,
   Sliders,
+  Moon,
+  Gamepad2,
+  Phone,
+  Wifi,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { usePresence } from "@/lib/presence/usePresence";
+import { PartnerPresenceBadge } from "@/components/ui/PartnerPresenceBadge";
+import { PresenceIndicator } from "@/components/ui/PresenceIndicator";
+import type { PresenceState } from "@/lib/presence/types";
 
 export default function ProfilePage() {
   const { showToast } = useToast();
   const { user } = useAuth();
+  const {
+    myState,
+    partnerState,
+    partnerDisplayName,
+    partnerCity,
+    partnerActivity,
+    partnerConnection,
+    setMyState,
+    setSimulatedPartnerState,
+  } = usePresence();
   const [viewState, setViewState] = useState<"normal" | "loading" | "empty">("normal");
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
   const [wakeChimes, setWakeChimes] = useState(true);
@@ -139,18 +157,40 @@ export default function ProfilePage() {
 
               {/* Sam */}
               <div className="flex flex-col items-center gap-2">
-                <Avatar
-                  name="Sam"
-                  colorRole="sage"
-                  size="lg"
-                  isOnline={true}
-                  imageUrl="https://picsum.photos/seed/sam-profile-tokyo/200/200"
-                />
+                <div className="relative">
+                  <Avatar
+                    name={partnerDisplayName || "Sam"}
+                    colorRole="sage"
+                    size="lg"
+                    isOnline={partnerState !== "offline"}
+                    imageUrl="https://picsum.photos/seed/sam-profile-tokyo/200/200"
+                  />
+                  {partnerState === "in_game" && (
+                    <span className="absolute -top-1 -right-1 p-1 rounded-full bg-shared-amber text-surface-deep shadow-md">
+                      <Gamepad2 className="w-3 h-3" />
+                    </span>
+                  )}
+                  {partnerState === "in_call" && (
+                    <span className="absolute -top-1 -right-1 p-1 rounded-full bg-cyan-500 text-surface-deep shadow-md">
+                      <Phone className="w-3 h-3" />
+                    </span>
+                  )}
+                  {partnerState === "away" && (
+                    <span className="absolute -top-1 -right-1 p-1 rounded-full bg-amber-400 text-surface-deep shadow-md">
+                      <Moon className="w-3 h-3" />
+                    </span>
+                  )}
+                </div>
                 <div className="text-center">
-                  <span className="text-sm font-semibold text-on-surface">Sam</span>
-                  <p className="text-[10px] font-mono text-player-two-sage">
-                    Tokyo · 07:24 (JST)
-                  </p>
+                  <span className="text-sm font-semibold text-on-surface">
+                    {partnerDisplayName || "Sam"}
+                  </span>
+                  <div className="flex items-center justify-center gap-1 mt-0.5">
+                    <PresenceIndicator state={partnerState} size="sm" />
+                    <span className="text-[10px] font-mono capitalize text-on-surface-variant">
+                      {partnerState.replace("_", " ")}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -164,6 +204,93 @@ export default function ProfilePage() {
               <div className="flex flex-col">
                 <span className="text-[10px] text-on-surface-variant">Distance</span>
                 <span className="text-on-surface font-semibold mt-0.5">9,560 km</span>
+              </div>
+            </div>
+          </Card>
+
+          {/* Real-time Ephemeral Presence Card */}
+          <PartnerPresenceBadge
+            partnerName={partnerDisplayName}
+            partnerCity={partnerCity}
+            state={partnerState}
+            activity={partnerActivity}
+            connectionStatus={partnerConnection}
+            variant="card"
+          />
+
+          {/* Your Presence Controls */}
+          <Card variant="raised" className="p-5 space-y-3">
+            <div className="flex items-center justify-between border-b border-subtle-border pb-2">
+              <div className="flex items-center gap-2">
+                <Radio className="w-4 h-4 text-shared-amber" />
+                <span className="text-xs font-semibold text-on-surface">
+                  Your Sanctuary Presence
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 font-mono text-[11px] text-player-one-ember">
+                <PresenceIndicator state={myState} size="sm" />
+                <span className="capitalize">{myState.replace("_", " ")}</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-on-surface-variant leading-relaxed">
+              Broadcast your real-time state to your partner across the secure RTDB socket. No precise GPS is stored or transmitted.
+            </p>
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 pt-1">
+              {(
+                [
+                  { state: "online", label: "Online", desc: "Browsing" },
+                  { state: "in_game", label: "In Game", desc: "Playing" },
+                  { state: "in_call", label: "In Call", desc: "Voice" },
+                  { state: "away", label: "Away", desc: "Stepped out" },
+                  { state: "offline", label: "Offline", desc: "Disconnected" },
+                ] as const
+              ).map((item) => (
+                <button
+                  key={item.state}
+                  onClick={() => {
+                    setMyState(item.state as PresenceState, item.desc);
+                    showToast({
+                      message: `Your presence updated to ${item.label}`,
+                      variant: "info",
+                    });
+                  }}
+                  className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all ${
+                    myState === item.state
+                      ? "bg-surface-overlay border-shared-amber text-shared-amber font-semibold shadow-sm"
+                      : "bg-surface-deep border-subtle-border/60 text-on-surface-variant hover:text-on-surface hover:border-subtle-border"
+                  }`}
+                >
+                  <PresenceIndicator state={item.state as PresenceState} size="sm" />
+                  <span className="text-[11px] mt-1 font-mono">{item.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Simulation trigger for partner presence testing */}
+            <div className="pt-2 border-t border-subtle-border/50 flex items-center justify-between">
+              <span className="text-[10px] font-mono text-on-surface-variant">
+                Simulate Partner State:
+              </span>
+              <div className="flex items-center gap-1">
+                {(["online", "in_game", "in_call", "away", "offline"] as const).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => {
+                      setSimulatedPartnerState(st);
+                      showToast({
+                        message: `Partner presence simulated as ${st}`,
+                        variant: "info",
+                      });
+                    }}
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-mono uppercase transition-colors ${
+                      partnerState === st
+                        ? "bg-player-two-sage/20 border border-player-two-sage text-player-two-sage font-bold"
+                        : "bg-surface-deep border border-subtle-border text-on-surface-variant hover:text-on-surface"
+                    }`}
+                  >
+                    {st.slice(0, 4)}
+                  </button>
+                ))}
               </div>
             </div>
           </Card>

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverGameRepository } from "@/lib/firebase/server/gameRepository";
-import { AuthoritativeGameEngine } from "@/lib/firebase/server/authoritativeGameEngine";
+import { AuthoritativeGameEngine, CAMERA_CHALLENGES } from "@/lib/firebase/server/authoritativeGameEngine";
 import type { GameSession, GameState, GameType } from "@/types/domain";
+
+export const dynamic = "force-dynamic";
 
 /**
  * Authoritative Game Session API Route
@@ -67,7 +69,12 @@ export async function POST(request: NextRequest) {
 
     // Initialize fresh authoritative session & state
     const now = Date.now();
-    const roundGen = AuthoritativeGameEngine.generateAuthoritativeRound(1, []);
+    const isSpeedDuel = gameType === "speed_duel";
+    const isCoupleRace = gameType === "couple_race";
+    const isCameraChallenge = gameType === "camera_challenge";
+    const roundGen = isSpeedDuel || isCoupleRace || isCameraChallenge ? null : AuthoritativeGameEngine.generateAuthoritativeRound(1, []);
+    const speedDuelTensionDelay = 2200;
+    const speedDuelTargetTime = now + speedDuelTensionDelay;
 
     const session: GameSession = {
       gameId,
@@ -81,31 +88,104 @@ export async function POST(request: NextRequest) {
       readyPlayerIds: [],
     };
 
-    const state: GameState = {
-      gameId,
-      gameType,
-      status: "ready",
-      currentRound: 1,
-      maxRounds: 5,
-      version: 1,
-      scores: Object.fromEntries(playerIds.map((pid) => [pid, 0])),
-      turnPlayerId: null,
-      roundStartedAtServer: now,
-      roundDeadlineServer: now + 15000,
-      serverTimestamp: now,
-      data: {
-        targetId: roundGen.targetId,
-        targetName: roundGen.target.name,
-        targetCode: roundGen.target.code,
-        targetClue: roundGen.target.clue,
-        board: roundGen.board,
-        usedTargetIds: [roundGen.targetId],
+    let initialData: Record<string, unknown>;
+
+    if (isCoupleRace) {
+      const players: Record<string, unknown> = {};
+      for (const pid of playerIds) {
+        players[pid] = {
+          playerId: pid,
+          position: 0,
+          lapsCompleted: 0,
+          powers: ["WIND_STRIDE"],
+          shieldActive: false,
+          activeEffects: [],
+          totalRolls: 0,
+          connectionStatus: "connected",
+          disconnectedAt: null,
+        };
+      }
+
+      initialData = {
+        gameType: "couple_race",
+        mode: "competitive",
+        boardSize: 24,
+        targetLaps: 2,
+        players,
+        currentTurnPlayerId: playerIds[0],
+        turnNumber: 1,
+        hasRolledThisTurn: false,
+        hasMovedThisTurn: false,
+        currentDiceValue: null,
+        secondDiceValue: null,
+        validMovePositions: [],
+        activePowerThisTurn: null,
+        isPaused: false,
+        pausedByPlayerId: null,
+        roundHistory: [],
+        cooperativeHarmonyScore: 0,
+      };
+    } else if (isSpeedDuel) {
+      initialData = {
+        gameType: "speed_duel",
+        roundStage: "ready",
+        tensionStartedAtServer: now,
+        tensionDelayMs: speedDuelTensionDelay,
+        targetAppearedAtServer: speedDuelTargetTime,
+        roundWinnerId: null,
+        roundWinnerReactionMs: null,
+        roundWinnerReason: null,
+        playerReactions: {},
+        falseStarts: {},
+        roundHistory: [],
+        competitiveMode: "first_to_3",
+      };
+    } else if (isCameraChallenge) {
+      initialData = {
+        gameType: "camera_challenge",
+        stage: "challenge",
+        currentPromptIndex: 0,
+        currentPrompt: CAMERA_CHALLENGES[0],
+        submissions: {},
+        stageStartedAtServer: now,
+        stageDeadlineServer: now + 60000,
+        roundHistory: [],
+        skips: {},
+        isGameEnd: false,
+      };
+    } else {
+      initialData = {
+        targetId: roundGen!.targetId,
+        targetName: roundGen!.target.name,
+        targetCode: roundGen!.target.code,
+        targetClue: roundGen!.target.clue,
+        board: roundGen!.board,
+        usedTargetIds: [roundGen!.targetId],
         roundWinnerId: null,
         roundWinningCell: null,
         lastMistake: null,
         roundStage: "ready",
         roundHistory: [],
-      },
+      };
+    }
+
+    const state: GameState = {
+      gameId,
+      gameType,
+      status: "ready",
+      currentRound: 1,
+      maxRounds: isCoupleRace ? 10 : 5,
+      version: 1,
+      scores: Object.fromEntries(playerIds.map((pid) => [pid, 0])),
+      turnPlayerId: isCoupleRace ? playerIds[0] : null,
+      roundStartedAtServer: now,
+      roundDeadlineServer: isSpeedDuel
+        ? speedDuelTargetTime + 6000
+        : isCoupleRace
+        ? now + 45000
+        : now + 15000,
+      serverTimestamp: now,
+      data: initialData,
       processedActionIds: {},
       isFinished: false,
       winnerId: null,

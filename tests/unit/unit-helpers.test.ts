@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { sha256, generatePairingCode } from "@/lib/utils/crypto";
 import {
   checkApiRateLimit,
@@ -13,6 +13,27 @@ import {
   CAMERA_CHALLENGES,
 } from "@/lib/firebase/server/authoritativeGameEngine";
 import { NextRequest } from "next/server";
+
+// Mock Firebase Admin SDK
+vi.mock("@/lib/firebase/server/admin", () => ({
+  getAdminAuth: vi.fn(() => ({
+    verifyIdToken: vi.fn(async (token: string) => {
+      if (token && token.startsWith("valid_token_")) {
+        const uid = token.replace("valid_token_", "");
+        return {
+          uid,
+          sub: uid,
+          email: `${uid}@example.com`,
+          email_verified: true,
+          auth_time: Math.floor(Date.now() / 1000),
+        };
+      }
+      throw new Error("Invalid token");
+    }),
+  })),
+  getAdminFirestore: vi.fn(() => ({})),
+  getAdminApp: vi.fn(() => ({})),
+}));
 
 describe("Unit Layer: Pure Functions, Utilities & Security Helpers", () => {
   describe("1. Crypto Utilities", () => {
@@ -100,33 +121,32 @@ describe("Unit Layer: Pure Functions, Utilities & Security Helpers", () => {
   });
 
   describe("4. Authentication Context Extraction", () => {
-    it("correctly extracts uid from standard Bearer headers", () => {
+    it("correctly extracts uid from standard Bearer headers with verified token", async () => {
       const req = new NextRequest("http://localhost:3000/api/games/action", {
         headers: {
-          authorization: "Bearer user_authentic_789",
+          authorization: "Bearer valid_token_user_authentic_789",
         },
       });
 
-      const auth = extractAuthContext(req);
+      const auth = await extractAuthContext(req);
       expect(auth).not.toBeNull();
       expect(auth?.uid).toBe("user_authentic_789");
     });
 
-    it("correctly extracts uid from uid-prefixed test headers", () => {
+    it("rejects insecure uid-prefixed test headers", async () => {
       const req = new NextRequest("http://localhost:3000/api/games/action", {
         headers: {
           authorization: "Bearer uid:user_partner_456",
         },
       });
 
-      const auth = extractAuthContext(req);
-      expect(auth).not.toBeNull();
-      expect(auth?.uid).toBe("user_partner_456");
+      const auth = await extractAuthContext(req);
+      expect(auth).toBeNull();
     });
 
-    it("returns null when no authorization header is supplied", () => {
+    it("returns null when no authorization header is supplied", async () => {
       const req = new NextRequest("http://localhost:3000/api/games/action");
-      const auth = extractAuthContext(req);
+      const auth = await extractAuthContext(req);
       expect(auth).toBeNull();
     });
   });

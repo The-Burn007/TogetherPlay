@@ -131,5 +131,10 @@ service cloud.firestore {
       allow read: if isCoupleMember(coupleId);
       allow write: if false;
     }
+
+    match /rateLimits/{rateLimitId} {
+      // Server-authoritative rate limits: direct client access is strictly forbidden
+      allow read, write: if false;
+    }
   }
 }

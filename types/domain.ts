@@ -219,6 +219,7 @@ export interface GameAction<TPayload = unknown> {
   type: GameActionType | string;
   payload: TPayload;
   clientTimestamp: number;
+  playerId?: string;
 }
 
 export interface GameActionResult {
@@ -235,6 +236,16 @@ export interface GameActionResult {
   gameResult?: GameResult;
 }
 
+export interface ProcessedActionRecord {
+  clientActionId: string;
+  type: string;
+  playerId: string;
+  gameId: string;
+  serverTimestamp: number;
+  stateVersion: number;
+  payload?: unknown;
+}
+
 /**
  * Authoritative ephemeral GameState stored in Firebase Realtime Database.
  * The server is strictly authoritative: clients can read but cannot write.
@@ -243,6 +254,8 @@ export interface GameState {
   gameId: string;
   gameType: GameType;
   status: GameStatus;
+  playerIds?: string[];
+  allowedPlayers?: Record<string, boolean>;
   currentRound: number;
   maxRounds: number;
   version: number;
@@ -253,6 +266,7 @@ export interface GameState {
   serverTimestamp: number;
   data: Record<string, unknown>;
   processedActionIds: Record<string, number>;
+  processedActions?: Record<string, ProcessedActionRecord>;
   lastProcessedAction?: {
     clientActionId: string;
     type: string;
@@ -382,7 +396,9 @@ export type WebRtcCallStatus =
   | "failed"
   | "permission_denied"
   | "no_camera"
-  | "no_microphone";
+  | "no_microphone"
+  | "unauthorized"
+  | "partner_disconnected";
 
 export interface WebRtcParticipant {
   userId: string;

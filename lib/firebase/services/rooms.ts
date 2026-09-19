@@ -8,6 +8,7 @@ import {
 import { db, auth } from "../client";
 import { handleFirestoreError, OperationType } from "../errors";
 import type { GameSession, GameAction, GameActionResult, GameType, GameStatus } from "@/types/domain";
+import { secureRandomHex } from "@/lib/utils/crypto";
 
 /**
  * Rooms & Game Sessions service contract via Cloud Firestore and Cloud Functions.
@@ -26,7 +27,8 @@ export interface RoomServiceContract {
 }
 
 export class FirebaseRoomService implements RoomServiceContract {
-  // In-memory session store for local/offline transitions and instant testing
+  // Non-authoritative local cache for offline/optimistic transitions and test isolation.
+  // CLASSIFICATION: cache / test state (must NEVER override newer Firebase state).
   private memorySessions = new Map<string, GameSession>();
 
   clearSessionsForTesting(): void {
@@ -34,23 +36,50 @@ export class FirebaseRoomService implements RoomServiceContract {
   }
 
   async getSession(gameId: string): Promise<GameSession | null> {
-    const memory = this.memorySessions.get(gameId);
-    if (memory) return { ...memory };
-
+    // 1. Always attempt authoritative Firestore query first
     try {
       if (auth.currentUser) {
         const gameSnap = await getDoc(doc(db, "games", gameId));
         if (gameSnap.exists()) {
-          return gameSnap.data() as GameSession;
+          const remoteSession = gameSnap.data() as GameSession;
+          // Refresh local cache with newer Firebase state
+          this.memorySessions.set(gameId, remoteSession);
+          return remoteSession;
         }
       }
     } catch {
-      // Fallback
+      // Offline / network failure: fall back to cached read
     }
+
+    // 2. Non-authoritative fallback if Firestore unavailable
+    const memory = this.memorySessions.get(gameId);
+    if (memory) return { ...memory };
     return null;
   }
 
   async getActiveSession(coupleId: string): Promise<GameSession | null> {
+    // 1. Authoritative Firestore check for active game
+    try {
+      if (auth.currentUser) {
+        const docRef = doc(db, "couples", coupleId);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.activeGameId) {
+            const gameSnap = await getDoc(doc(db, "games", data.activeGameId));
+            if (gameSnap.exists()) {
+              const liveSession = gameSnap.data() as GameSession;
+              this.memorySessions.set(liveSession.gameId, liveSession);
+              return liveSession;
+            }
+          }
+        }
+      }
+    } catch {
+      // Offline fallback
+    }
+
+    // 2. Local fallback if offline or in unauthenticated test fixture
     const matching: GameSession[] = [];
     for (const session of this.memorySessions.values()) {
       if (session.coupleId === coupleId && session.status !== "game_end" && session.status !== "results") {
@@ -64,29 +93,11 @@ export class FirebaseRoomService implements RoomServiceContract {
       return { ...matching[0] };
     }
 
-    try {
-      if (auth.currentUser) {
-        const docRef = doc(db, "couples", coupleId);
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data.activeGameId) {
-            const gameSnap = await getDoc(doc(db, "games", data.activeGameId));
-            if (gameSnap.exists()) {
-              return gameSnap.data() as GameSession;
-            }
-          }
-        }
-      }
-    } catch {
-      // Fall back safely to memory session
-    }
-
     return null;
   }
 
   async createSession(coupleId: string, gameType: GameType, createdBy: string): Promise<GameSession> {
-    const gameId = `gm_${Math.random().toString(36).substring(2, 9)}${Date.now().toString(36)}`;
+    const gameId = `gm_${secureRandomHex(6)}_${Date.now()}`;
     const now = new Date().toISOString();
 
     const session: GameSession = {
@@ -119,7 +130,7 @@ export class FirebaseRoomService implements RoomServiceContract {
   }
 
   async joinSession(gameId: string, userId: string): Promise<GameSession> {
-    const session = this.memorySessions.get(gameId);
+    let session = await this.getSession(gameId);
     if (session) {
       if (!session.playerIds.includes(userId)) {
         session.playerIds.push(userId);
@@ -130,10 +141,24 @@ export class FirebaseRoomService implements RoomServiceContract {
       if (!session.audioStatus) session.audioStatus = {};
       session.audioStatus[userId] = "active";
       this.memorySessions.set(gameId, { ...session });
+
+      try {
+        if (auth.currentUser) {
+          const gameRef = doc(db, "games", gameId);
+          await updateDoc(gameRef, {
+            playerIds: session.playerIds,
+            status: session.status,
+            videoStatus: session.videoStatus,
+            audioStatus: session.audioStatus,
+          });
+        }
+      } catch {
+        // Offline fallback
+      }
       return { ...session };
     }
 
-    // Default synthesized joined session
+    // Default synthesized joined session for offline testing
     const synthesized: GameSession = {
       gameId,
       coupleId: "cpl_active",
@@ -153,7 +178,7 @@ export class FirebaseRoomService implements RoomServiceContract {
   }
 
   async setReadyStatus(gameId: string, userId: string, isReady: boolean): Promise<void> {
-    const session = this.memorySessions.get(gameId);
+    let session = await this.getSession(gameId);
     if (session) {
       const readySet = new Set(session.readyPlayerIds || []);
       if (isReady) {
@@ -161,21 +186,40 @@ export class FirebaseRoomService implements RoomServiceContract {
       } else {
         readySet.delete(userId);
       }
-      session.readyPlayerIds = Array.from(readySet);
-      if (session.readyPlayerIds.length >= 2) {
-        session.status = "countdown";
-      } else {
-        session.status = "ready";
-      }
+      const updatedReady = Array.from(readySet);
+      const nextStatus: GameStatus = updatedReady.length >= 2 ? "countdown" : "ready";
+      session.readyPlayerIds = updatedReady;
+      session.status = nextStatus;
       this.memorySessions.set(gameId, { ...session });
+
+      try {
+        if (auth.currentUser) {
+          const gameRef = doc(db, "games", gameId);
+          await updateDoc(gameRef, {
+            readyPlayerIds: updatedReady,
+            status: nextStatus,
+          });
+        }
+      } catch {
+        // Offline fallback
+      }
     }
   }
 
   async updateSessionStatus(gameId: string, status: GameStatus): Promise<void> {
-    const session = this.memorySessions.get(gameId);
+    let session = await this.getSession(gameId);
     if (session) {
       session.status = status;
       this.memorySessions.set(gameId, { ...session });
+
+      try {
+        if (auth.currentUser) {
+          const gameRef = doc(db, "games", gameId);
+          await updateDoc(gameRef, { status });
+        }
+      } catch {
+        // Offline fallback
+      }
     }
   }
 

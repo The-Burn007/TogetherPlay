@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { serverGameRepository } from "@/lib/firebase/server/gameRepository";
+import { serverGameRepository, PersistenceError, logStructuredError } from "@/lib/firebase/server/gameRepository";
 import { AuthoritativeGameEngine, CAMERA_CHALLENGES } from "@/lib/firebase/server/authoritativeGameEngine";
+import { requireServerAuth, forbiddenResponse } from "@/lib/firebase/server/auth";
+import { requireAppCheck } from "@/lib/firebase/server/security";
 import type { GameSession, GameState, GameType } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -13,38 +15,114 @@ export const dynamic = "force-dynamic";
  * - POST: Creates or returns an active game session for multi-player synchronization
  */
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const gameId = searchParams.get("gameId");
+  const requestId =
+    request.headers.get("x-request-id") ||
+    `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  let gameId = "unknown_game";
 
-    if (!gameId) {
+  try {
+    // 1. App Check Attestation
+    const appCheckResult = await requireAppCheck(request);
+    if (!appCheckResult.success) {
+      return appCheckResult.errorResponse;
+    }
+
+    // 2. User Authentication
+    const authResult = await requireServerAuth(request);
+    if ("errorResponse" in authResult) {
+      return authResult.errorResponse;
+    }
+    const authUser = authResult.user;
+
+    const { searchParams } = new URL(request.url);
+    const queriedGameId = searchParams.get("gameId");
+
+    if (!queriedGameId) {
       return NextResponse.json(
-        { error: { message: "Missing required 'gameId' query parameter" } },
+        { error: { code: "INVALID_REQUEST", message: "Missing required 'gameId' query parameter" } },
         { status: 400 }
       );
     }
+    gameId = queriedGameId;
 
     const aggregate = await serverGameRepository.getGameAggregate(gameId);
 
     if (!aggregate) {
       return NextResponse.json(
-        { error: { message: `Game session '${gameId}' not found` } },
+        { error: { code: "GAME_NOT_FOUND", message: `Game session '${gameId}' not found` } },
         { status: 404 }
       );
     }
 
+    // Access control: User must be a member player in this session
+    if (!aggregate.session.playerIds.includes(authUser.uid)) {
+      return forbiddenResponse("Access denied: You are not a player in this game session.");
+    }
+
     return NextResponse.json(aggregate, { status: 200 });
   } catch (error) {
-    console.error("[GameSession GET Error]", error);
+    if (error instanceof PersistenceError) {
+      logStructuredError({
+        requestId,
+        gameId,
+        actionId: "none",
+        errorCategory: "PERSISTENCE_FAILURE",
+        operation: error.operation,
+        statusCode: 500,
+        message: error.message,
+        error,
+      });
+
+      return NextResponse.json(
+        {
+          error: {
+            code: "PERSISTENCE_ERROR",
+            message: "Failed to read game session from persistent store.",
+          },
+        },
+        { status: 500 }
+      );
+    }
+
+    logStructuredError({
+      requestId,
+      gameId,
+      actionId: "none",
+      errorCategory: "INTERNAL_FAILURE",
+      statusCode: 500,
+      message: error instanceof Error ? error.message : "Internal server error fetching game session",
+      error,
+    });
+
     return NextResponse.json(
-      { error: { message: "Internal server error fetching game session" } },
+      { error: { code: "INTERNAL_ERROR", message: "Internal server error fetching game session" } },
       { status: 500 }
     );
   }
 }
 
 export async function POST(request: NextRequest) {
+  const requestId =
+    request.headers.get("x-request-id") ||
+    `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  let gameId = "unknown_game";
+  let authUid: string | undefined;
+
   try {
+    // 1. App Check Attestation
+    const appCheckResult = await requireAppCheck(request);
+    if (!appCheckResult.success) {
+      return appCheckResult.errorResponse;
+    }
+
+    // 2. User Authentication
+    const authResult = await requireServerAuth(request);
+    if ("errorResponse" in authResult) {
+      return authResult.errorResponse;
+    }
+    const authUser = authResult.user;
+    authUid = authUser.uid;
+
     const body = (await request.json().catch(() => ({}))) as {
       gameId?: string;
       coupleId?: string;
@@ -53,19 +131,36 @@ export async function POST(request: NextRequest) {
       resetIfFinished?: boolean;
     };
 
-    const gameId = body.gameId || `fif_${Date.now().toString(36)}`;
-    const coupleId = body.coupleId || "couple_london_tokyo";
+    gameId = body.gameId || `fif_${Date.now().toString(36)}`;
+    const coupleId = body.coupleId || "couple_space";
     const gameType: GameType = body.gameType || "find_it_first";
-    const playerIds =
-      body.playerIds && body.playerIds.length >= 2
-        ? body.playerIds
-        : ["user_alex", "user_sam"];
 
     // Check if session already exists
     const existing = await serverGameRepository.getGameAggregate(gameId);
-    if (existing && !body.resetIfFinished) {
-      return NextResponse.json(existing, { status: 200 });
+    if (existing) {
+      // Access control on existing session: Only participants may view or reset it
+      if (!existing.session.playerIds.includes(authUser.uid)) {
+        return forbiddenResponse("Access denied: You are not a player in this game session.");
+      }
+
+      const isFinished =
+        Boolean(existing.state?.isFinished) ||
+        existing.state?.status === "game_end" ||
+        existing.session?.status === "game_end" ||
+        existing.session?.status === "results";
+
+      // If already exists and either reset is not requested OR game is not finished, return existing
+      if (!body.resetIfFinished || !isFinished) {
+        return NextResponse.json(existing, { status: 200 });
+      }
     }
+
+    // Ensure authenticated user is in the player list
+    const playerIds = body.playerIds && body.playerIds.length >= 1
+      ? body.playerIds.includes(authUser.uid)
+        ? body.playerIds
+        : [authUser.uid, ...body.playerIds]
+      : [authUser.uid, "partner"];
 
     // Initialize fresh authoritative session & state
     const now = Date.now();
@@ -82,7 +177,7 @@ export async function POST(request: NextRequest) {
       gameType,
       status: "ready",
       playerIds,
-      createdBy: playerIds[0],
+      createdBy: authUser.uid,
       createdAt: new Date(now).toISOString(),
       schemaVersion: 1,
       readyPlayerIds: [],
@@ -196,9 +291,43 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ session, state }, { status: 201 });
   } catch (error) {
-    console.error("[GameSession POST Error]", error);
+    if (error instanceof PersistenceError) {
+      logStructuredError({
+        requestId,
+        gameId,
+        actionId: "none",
+        playerId: authUid,
+        errorCategory: "PERSISTENCE_FAILURE",
+        operation: error.operation,
+        statusCode: 500,
+        message: error.message,
+        error,
+      });
+
+      return NextResponse.json(
+        {
+          error: {
+            code: "PERSISTENCE_ERROR",
+            message: "Failed to persist game session to authoritative store.",
+          },
+        },
+        { status: 500 }
+      );
+    }
+
+    logStructuredError({
+      requestId,
+      gameId,
+      actionId: "none",
+      playerId: authUid,
+      errorCategory: "INTERNAL_FAILURE",
+      statusCode: 500,
+      message: error instanceof Error ? error.message : "Internal server error creating game session",
+      error,
+    });
+
     return NextResponse.json(
-      { error: { message: "Internal server error creating game session" } },
+      { error: { code: "INTERNAL_ERROR", message: "Internal server error creating game session" } },
       { status: 500 }
     );
   }

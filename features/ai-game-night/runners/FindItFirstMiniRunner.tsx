@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import { Eye, Clock, Trophy, Sparkles } from "lucide-react";
 import type { GameNightActivity, GameNightActivityResult } from "@/lib/ai/gameNightTypes";
 import { gameNightAudio } from "@/lib/ai/gameNightAudio";
+import { secureFisherYatesShuffle } from "@/lib/utils/crypto";
 
 interface FindItFirstMiniRunnerProps {
   activity: GameNightActivity;
@@ -42,7 +43,7 @@ export const FindItFirstMiniRunner: React.FC<FindItFirstMiniRunnerProps> = ({
 
   // Target item selected deterministically
   const [targetItem] = useState(() => GRID_ITEMS[1]); // Compass
-  const [shuffledItems] = useState(() => [...GRID_ITEMS].sort(() => 0.5 - Math.random()));
+  const [shuffledItems] = useState(() => secureFisherYatesShuffle(GRID_ITEMS));
   const [timeLeft, setTimeLeft] = useState(15);
   const [claimedBy, setClaimedBy] = useState<string | null>(null);
   const [reactionMs, setReactionMs] = useState<number | null>(null);

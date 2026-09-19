@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { auth } from "@/lib/firebase/client";
 import { coupleService, type CreateInviteResult } from "@/lib/firebase/services/couple";
 import type { Couple, CoupleInvite } from "@/types/domain";
 import {
@@ -237,14 +238,19 @@ function InviteContent() {
 
     setIsAccepting(true);
     try {
-      // Server-side verification & membership change
+      const token = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      // Server-side verification & atomic transaction membership change
       const res = await fetch("/api/couples/accept-invite", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           inviteId: targetInviteId.trim(),
           code: targetCode.trim(),
-          acceptingUserId: user.uid,
         }),
       });
 

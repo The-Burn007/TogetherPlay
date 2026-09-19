@@ -124,22 +124,63 @@ export const SpeedDuelArena: React.FC<SpeedDuelArenaProps> = ({
     initSession();
 
     // Subscribe to realtime state updates
-    const unsubState = authoritativeGameClient.subscribeToEphemeralState(gameId, (st) => {
+    let unsubState = authoritativeGameClient.subscribeToEphemeralState(gameId, (st) => {
       if (isSubscribed && st) {
         handleGameStateUpdate(st);
+        authoritativeGameClient.reconcileInFlightActions(gameId, st);
       }
     });
 
-    const unsubSession = authoritativeGameClient.subscribeToDurableSession(gameId, (s) => {
+    let unsubSession = authoritativeGameClient.subscribeToDurableSession(gameId, (s) => {
       if (isSubscribed && s) {
         setSession(s);
       }
     });
 
+    // Rehydrate on network restore, tab switch, or wake from sleep
+    const onReconnectOrWake = async () => {
+      if (!isSubscribed) return;
+      try {
+        const agg = await authoritativeGameClient.fetchGameAggregate(gameId);
+        if (agg && isSubscribed) {
+          setSession(agg.session);
+          setGameState(agg.state);
+          handleGameStateUpdate(agg.state);
+          authoritativeGameClient.reconcileInFlightActions(gameId, agg.state);
+        }
+        // Re-establish fresh listeners
+        unsubState();
+        unsubSession();
+        unsubState = authoritativeGameClient.subscribeToEphemeralState(gameId, (st) => {
+          if (isSubscribed && st) {
+            handleGameStateUpdate(st);
+            authoritativeGameClient.reconcileInFlightActions(gameId, st);
+          }
+        });
+        unsubSession = authoritativeGameClient.subscribeToDurableSession(gameId, (s) => {
+          if (isSubscribed && s) setSession(s);
+        });
+      } catch {
+        // Fallback
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", onReconnectOrWake);
+      window.addEventListener("focus", onReconnectOrWake);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") onReconnectOrWake();
+      });
+    }
+
     return () => {
       isSubscribed = false;
       unsubState();
       unsubSession();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", onReconnectOrWake);
+        window.removeEventListener("focus", onReconnectOrWake);
+      }
     };
   }, [gameId, handleGameStateUpdate]);
 

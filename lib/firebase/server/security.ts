@@ -1,3 +1,9 @@
+import { authenticateServerRequest } from "./auth";
+
+if (typeof window !== "undefined") {
+  throw new Error("Security Violation: Server security utilities cannot be loaded in client browser bundle.");
+}
+
 /**
  * Server-side Security & Validation Module
  * 
@@ -11,69 +17,19 @@ export interface AuthContext {
   isAnonymous?: boolean;
 }
 
-export interface SecurityVerificationOptions {
-  enforceAppCheck?: boolean;
-}
+export {
+  verifyAppCheckToken,
+  type AppCheckVerificationResult,
+  type AppCheckVerificationOptions,
+  type AppCheckErrorCode,
+  extractAppCheckToken,
+  appCheckErrorResponse,
+  requireAppCheck,
+  requireServerSecurity,
+} from "./appCheck";
 
-export interface AppCheckVerificationResult {
-  valid: boolean;
-  appId?: string;
-  reason?: string;
-}
+export type SecurityVerificationOptions = import("./appCheck").AppCheckVerificationOptions;
 
-/**
- * Verifies that the client provided a valid App Check token.
- * In production, this validates against the Firebase App Check verification service.
- * In development/test environments, supports test tokens while rejecting invalid/missing tokens.
- */
-export async function verifyAppCheckToken(
-  token: string | null | undefined,
-  options: SecurityVerificationOptions = { enforceAppCheck: true }
-): Promise<AppCheckVerificationResult> {
-  if (!options.enforceAppCheck) {
-    return { valid: true, appId: "app-check-bypassed" };
-  }
-
-  if (!token || typeof token !== "string" || token.trim().length === 0) {
-    return {
-      valid: false,
-      reason: "Missing App Check token",
-    };
-  }
-
-  const trimmed = token.trim();
-
-  // Explicitly reject known invalid tokens
-  if (
-    trimmed === "invalid-token" ||
-    trimmed === "expired-token" ||
-    trimmed === "malformed" ||
-    trimmed.length < 8
-  ) {
-    return {
-      valid: false,
-      reason: "App Check token is invalid or expired",
-    };
-  }
-
-  // Support test tokens for Vitest / integration tests
-  if (
-    trimmed === "valid-test-app-check-token" ||
-    trimmed.startsWith("ey") || // JWT format standard for Firebase App Check tokens
-    trimmed.startsWith("appcheck_test_")
-  ) {
-    return {
-      valid: true,
-      appId: "togetherplay-app-check-verified",
-    };
-  }
-
-  // Reject unrecognized non-JWT strings
-  return {
-    valid: false,
-    reason: "App Check token format unrecognized or invalid signature",
-  };
-}
 
 /**
  * Validates the basic structural integrity of a GameAction payload.
@@ -109,33 +65,197 @@ export function validateActionPayloadStructure(action: unknown): {
   }
 
   // SECURITY MANDATE: The client is UNTRUSTED.
-  // For SELECT_CELL, the client cannot submit: score, winner, correct, target, server time, etc.
-  if (
-    candidate.type === "SELECT_CELL" &&
-    candidate.payload &&
-    typeof candidate.payload === "object"
-  ) {
-    const payload = candidate.payload as Record<string, unknown>;
-    const forbiddenFields = [
-      "score",
-      "scores",
-      "winner",
-      "winnerId",
-      "correct",
-      "isCorrect",
-      "target",
-      "targetId",
-      "serverTime",
-      "serverTimestamp",
-      "stateVersion",
-    ];
+  // Global forbidden bypass and test cheating flags are rejected on ALL actions.
+  const globalForbiddenFields = [
+    "isCorrectMock",
+    "skipAuth",
+    "skipValidation",
+    "bypass",
+    "mock",
+    "force",
+    "cheat",
+    "randomSeed",
+    "mockRandom",
+    "testRandom",
+    "injectedRandom",
+    "testSeed",
+    "deterministicSeed",
+  ];
 
-    for (const field of forbiddenFields) {
+  for (const field of globalForbiddenFields) {
+    if (field in candidate) {
+      return {
+        valid: false,
+        error: `Client cannot submit testing/bypass field '${field}'. Authoritative outcomes are strictly server-determined.`,
+      };
+    }
+  }
+
+  // Reject unexpected top-level fields on GameAction candidate
+  const allowedTopLevelKeys = new Set([
+    "gameId",
+    "clientActionId",
+    "type",
+    "clientTimestamp",
+    "payload",
+    "playerId",
+    "expectedVersion",
+    "version",
+  ]);
+  for (const key of Object.keys(candidate)) {
+    if (!allowedTopLevelKeys.has(key)) {
+      return {
+        valid: false,
+        error: `Unexpected top-level action field '${key}'.`,
+      };
+    }
+  }
+
+  if (candidate.payload && typeof candidate.payload === "object") {
+    const payload = candidate.payload as Record<string, unknown>;
+
+    // Global forbidden payload fields across all environments
+    for (const field of globalForbiddenFields) {
       if (field in payload) {
         return {
           valid: false,
-          error: `Client cannot submit authoritative field '${field}'. The server is strictly authoritative.`,
+          error: `Client cannot submit bypass or mock field '${field}'. Authoritative outcomes are strictly server-determined.`,
         };
+      }
+    }
+
+    // Production-strict constraint: production clients must NEVER submit authoritative fields
+    const isProduction = process.env.NODE_ENV === "production";
+    if (isProduction) {
+      const productionForbiddenAuthoritativeFields = [
+        "score",
+        "scores",
+        "points",
+        "pointsAwarded",
+        "winner",
+        "winnerId",
+        "roundWinnerId",
+        "winningPlayerId",
+        "target",
+        "targetId",
+        "targetAnswer",
+        "targetAppearedAtServer",
+        "correct",
+        "isCorrect",
+        "correctAnswer",
+        "answerCorrect",
+        "isAnswerCorrect",
+        "diceResult",
+        "diceValue",
+        "diceRoll",
+        "serverDiceValue",
+        "authoritativeTimestamp",
+        "serverTime",
+        "serverTimestamp",
+        "roundStartedAtServer",
+        "roundDeadlineServer",
+        "playerIdentity",
+        "gamePhase",
+        "phase",
+        "status",
+        "gameStatus",
+        "roundStage",
+        "stateVersion",
+        "tensionDelayMs",
+        "randomCountdown",
+        "countdownMs",
+        "targetPlacement",
+        "board",
+        "shuffledBoard",
+      ];
+
+      for (const field of productionForbiddenAuthoritativeFields) {
+        if (field in payload) {
+          return {
+            valid: false,
+            error: `Production client cannot submit authoritative field '${field}'. The server is strictly authoritative.`,
+          };
+        }
+      }
+    }
+
+    // Action-specific validations (enforced across all environments)
+    if (candidate.type === "SELECT_CELL" || candidate.type === "SUBMIT_ANSWER") {
+      const forbiddenFields = [
+        "score",
+        "scores",
+        "points",
+        "winner",
+        "winnerId",
+        "roundWinnerId",
+        "correct",
+        "isCorrect",
+        "isCorrectMock",
+        "correctAnswer",
+        "answerCorrect",
+        "target",
+        "targetId",
+        "targetAnswer",
+        "serverTime",
+        "serverTimestamp",
+        "stateVersion",
+        "diceResult",
+        "diceValue",
+        "status",
+        "phase",
+        "roundStage",
+      ];
+
+      for (const field of forbiddenFields) {
+        if (field in payload) {
+          return {
+            valid: false,
+            error: `Client cannot submit authoritative field '${field}'. The server is strictly authoritative.`,
+          };
+        }
+      }
+    }
+
+    if (candidate.type === "TRIGGER_TARGET" || candidate.type === "SUBMIT_REACTION") {
+      const forbiddenFields = [
+        "targetAppearedAtServer",
+        "targetTime",
+        "winner",
+        "winnerId",
+        "roundWinnerId",
+        "score",
+        "scores",
+        "points",
+        "reactionTimeMs",
+      ];
+
+      for (const field of forbiddenFields) {
+        if (field in payload) {
+          return {
+            valid: false,
+            error: `Client cannot submit authoritative field '${field}'. The server is strictly authoritative.`,
+          };
+        }
+      }
+    }
+
+    if (candidate.type === "MOVE") {
+      const forbiddenFields = [
+        "score",
+        "scores",
+        "winner",
+        "winnerId",
+        "lapsCompleted",
+        "position",
+      ];
+
+      for (const field of forbiddenFields) {
+        if (field in payload) {
+          return {
+            valid: false,
+            error: `Client cannot submit authoritative field '${field}'. The server is strictly authoritative.`,
+          };
+        }
       }
     }
   }
@@ -145,85 +265,62 @@ export function validateActionPayloadStructure(action: unknown): {
 
 /**
  * Extracts authenticated user context from HTTP Authorization headers.
- * Supports standard Bearer JWTs, Bearer uid:<uid> test tokens, and raw UID tokens.
+ * Uses Firebase Admin SDK to cryptographically verify the ID token.
+ * Production does NOT support fake uid: tokens or unsigned JWTs.
  */
-export function extractAuthContext(
+export async function extractAuthContext(
   source: Request | Headers | string | null | undefined
-): AuthContext | null {
-  let authHeader: string | null = null;
-  if (!source) return null;
-  if (typeof source === "string") {
-    authHeader = source;
-  } else if ("headers" in (source as object) && typeof (source as Request).headers?.get === "function") {
-    authHeader = (source as Request).headers.get("Authorization");
-  } else if (typeof (source as Headers).get === "function") {
-    authHeader = (source as Headers).get("Authorization");
-  }
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+): Promise<AuthContext | null> {
+  const result = await authenticateServerRequest(source);
+  if (!result.success) {
     return null;
   }
+  return {
+    uid: result.user.uid,
+    email: result.user.email,
+  };
+}
 
-  const token = authHeader.substring(7).trim();
-  if (!token) return null;
+import {
+  checkSharedRateLimitSync,
+  checkSharedRateLimit,
+  clearSharedRateLimitsForTesting,
+  type RateLimitPromise,
+  type RateLimitResult,
+} from "./sharedRateLimiter";
 
-  if (token.startsWith("uid:")) {
-    const uid = token.replace("uid:", "").trim();
-    return uid ? { uid } : null;
-  }
-
-  // Parse payload for standard JWT tokens
-  if (token.includes(".")) {
-    try {
-      const parts = token.split(".");
-      if (parts.length === 3) {
-        const payloadStr = Buffer.from(parts[1], "base64").toString("utf8");
-        const payload = JSON.parse(payloadStr);
-        const uid = payload.user_id || payload.sub || payload.uid;
-        if (uid) {
-          return { uid, email: payload.email };
-        }
-      }
-    } catch {
-      // Fallback
-    }
-  }
-
-  return { uid: token };
+export function clearRateLimitsForTesting(): void {
+  clearSharedRateLimitsForTesting();
 }
 
 /**
- * Universal in-memory sliding window rate limiter for API endpoints.
+ * Universal sliding window rate limiter for API endpoints.
+ * Backed by Firestore shared authority across server instances with in-memory fail-safe fallback.
  */
-interface RateLimitRecord {
-  timestamps: number[];
-}
-const rateLimitMap = new Map<string, RateLimitRecord>();
-
 export function checkApiRateLimit(
   key: string,
   maxRequests = 60,
-  windowMs = 60000
-): { allowed: boolean; remaining: number; resetInSeconds: number } {
-  const now = Date.now();
-  let record = rateLimitMap.get(key);
-  if (!record) {
-    record = { timestamps: [] };
-    rateLimitMap.set(key, record);
-  }
+  windowMs = 60000,
+  ip?: string
+): RateLimitPromise {
+  return checkSharedRateLimitSync({
+    key,
+    maxRequests,
+    windowMs,
+    ip,
+  });
+}
 
-  record.timestamps = record.timestamps.filter((t) => now - t < windowMs);
-
-  if (record.timestamps.length >= maxRequests) {
-    const oldest = record.timestamps[0];
-    const resetInSeconds = Math.max(1, Math.ceil((oldest + windowMs - now) / 1000));
-    return { allowed: false, remaining: 0, resetInSeconds };
-  }
-
-  record.timestamps.push(now);
-  return {
-    allowed: true,
-    remaining: maxRequests - record.timestamps.length,
-    resetInSeconds: Math.ceil(windowMs / 1000),
-  };
+export async function checkApiRateLimitShared(
+  key: string,
+  maxRequests = 60,
+  windowMs = 60000,
+  ip?: string
+): Promise<RateLimitResult> {
+  return checkSharedRateLimit({
+    key,
+    maxRequests,
+    windowMs,
+    ip,
+  });
 }

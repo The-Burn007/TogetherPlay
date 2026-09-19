@@ -19,7 +19,7 @@ import {
   off,
   push,
 } from "firebase/database";
-import { rtdb } from "../client";
+import { rtdb, auth } from "../client";
 import type {
   WebRtcParticipant,
   WebRtcSignalOffer,
@@ -27,13 +27,24 @@ import type {
   WebRtcSignalCandidate,
 } from "@/types/domain";
 
+export class SignalingSecurityError extends Error {
+  constructor(
+    message: string,
+    public readonly code: "UNAUTHENTICATED" | "UNAUTHORIZED" | "INVALID_ROOM" | "PERMISSION_DENIED"
+  ) {
+    super(message);
+    this.name = "SignalingSecurityError";
+  }
+}
+
 export interface SignalingServiceContract {
   publishParticipant(roomId: string, participant: WebRtcParticipant): Promise<void>;
   updateParticipant(roomId: string, userId: string, updates: Partial<WebRtcParticipant>): Promise<void>;
   removeParticipant(roomId: string, userId: string): Promise<void>;
   subscribeToParticipants(
     roomId: string,
-    callback: (participants: Record<string, WebRtcParticipant>) => void
+    callback: (participants: Record<string, WebRtcParticipant>) => void,
+    subscriberUserId?: string
   ): () => void;
   sendOffer(roomId: string, offer: WebRtcSignalOffer): Promise<void>;
   subscribeToOffers(
@@ -63,6 +74,31 @@ class MemorySignalingBus {
   private answers = new Map<string, Map<string, WebRtcSignalAnswer>>();
   private candidates = new Map<string, Map<string, WebRtcSignalCandidate[]>>();
   private listeners = new Map<string, Set<(data: unknown) => void>>();
+  private authorizedRooms = new Map<string, Set<string>>();
+  private strictAuthorization = false;
+
+  setStrictAuthorization(enabled: boolean) {
+    this.strictAuthorization = enabled;
+  }
+
+  authorizeRoomUsers(roomId: string, userIds: string[]) {
+    if (!this.authorizedRooms.has(roomId)) {
+      this.authorizedRooms.set(roomId, new Set());
+    }
+    const set = this.authorizedRooms.get(roomId)!;
+    userIds.forEach((id) => set.add(id));
+  }
+
+  revokeRoom(roomId: string) {
+    this.authorizedRooms.delete(roomId);
+  }
+
+  isUserAuthorized(roomId: string, userId: string): boolean {
+    if (this.authorizedRooms.has(roomId)) {
+      return this.authorizedRooms.get(roomId)!.has(userId);
+    }
+    return !this.strictAuthorization;
+  }
 
   private getChannelKey(type: string, roomId: string, extra = ""): string {
     return `${type}:${roomId}:${extra}`;
@@ -160,11 +196,22 @@ class MemorySignalingBus {
     this.notify(this.getChannelKey("candidate", roomId, candidate.toUserId), { ...candidate });
   }
 
+  getOffer(roomId: string, toUserId: string): WebRtcSignalOffer | null {
+    return this.offers.get(roomId)?.get(toUserId) || null;
+  }
+
+  getAnswer(roomId: string, toUserId: string): WebRtcSignalAnswer | null {
+    return this.answers.get(roomId)?.get(toUserId) || null;
+  }
+
   clearRoomUser(roomId: string, userId: string) {
     this.removeParticipant(roomId, userId);
     this.offers.get(roomId)?.delete(userId);
+    this.notify(this.getChannelKey("offer", roomId, userId), null);
     this.answers.get(roomId)?.delete(userId);
+    this.notify(this.getChannelKey("answer", roomId, userId), null);
     this.candidates.get(roomId)?.delete(userId);
+    this.notify(this.getChannelKey("candidate", roomId, userId), null);
   }
 
   resetAll() {
@@ -173,6 +220,8 @@ class MemorySignalingBus {
     this.answers.clear();
     this.candidates.clear();
     this.listeners.clear();
+    this.authorizedRooms.clear();
+    this.strictAuthorization = false;
   }
 }
 
@@ -194,9 +243,45 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
   }
 
   /**
+   * Validates participant identity against the authenticated Firebase Auth session.
+   */
+  public verifyIdentity(userId: string): void {
+    if (!userId || typeof userId !== "string" || userId.trim() === "") {
+      throw new SignalingSecurityError("User ID is required for WebRTC signaling.", "UNAUTHORIZED");
+    }
+
+    if (typeof window !== "undefined" && auth?.currentUser) {
+      if (auth.currentUser.uid !== userId) {
+        throw new SignalingSecurityError(
+          `Signaling identity mismatch: authenticated UID '${auth.currentUser.uid}' does not match requested '${userId}'.`,
+          "UNAUTHENTICATED"
+        );
+      }
+    }
+  }
+
+  /**
+   * Validates that the user is authorized for the given signaling room.
+   */
+  public verifyRoomAuthorization(roomId: string, userId: string): void {
+    if (!roomId || typeof roomId !== "string" || roomId.trim() === "") {
+      throw new SignalingSecurityError("Invalid room ID for WebRTC signaling.", "INVALID_ROOM");
+    }
+    this.verifyIdentity(userId);
+
+    if (!memorySignalingBus.isUserAuthorized(roomId, userId)) {
+      throw new SignalingSecurityError(
+        `User '${userId}' is not authorized to access signaling in room '${roomId}'.`,
+        "UNAUTHORIZED"
+      );
+    }
+  }
+
+  /**
    * Registers or updates participant presence in the signaling room.
    */
   async publishParticipant(roomId: string, participant: WebRtcParticipant): Promise<void> {
+    this.verifyRoomAuthorization(roomId, participant.userId);
     memorySignalingBus.setParticipant(roomId, participant);
     if (this.hasRtdb()) {
       try {
@@ -216,6 +301,7 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
     userId: string,
     updates: Partial<WebRtcParticipant>
   ): Promise<void> {
+    this.verifyRoomAuthorization(roomId, userId);
     memorySignalingBus.updateParticipant(roomId, userId, updates);
     if (this.hasRtdb()) {
       try {
@@ -236,6 +322,7 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
    * Removes participant upon leaving the video call.
    */
   async removeParticipant(roomId: string, userId: string): Promise<void> {
+    this.verifyRoomAuthorization(roomId, userId);
     memorySignalingBus.removeParticipant(roomId, userId);
     if (this.hasRtdb()) {
       try {
@@ -252,8 +339,12 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
    */
   subscribeToParticipants(
     roomId: string,
-    callback: (participants: Record<string, WebRtcParticipant>) => void
+    callback: (participants: Record<string, WebRtcParticipant>) => void,
+    subscriberUserId?: string
   ): () => void {
+    if (subscriberUserId) {
+      this.verifyRoomAuthorization(roomId, subscriberUserId);
+    }
     const memoryUnsub = memorySignalingBus.subscribe(`participants:${roomId}:`, (data) => {
       callback(data as Record<string, WebRtcParticipant>);
     });
@@ -301,6 +392,7 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
    * Sends an SDP offer to a specific peer.
    */
   async sendOffer(roomId: string, offer: WebRtcSignalOffer): Promise<void> {
+    this.verifyRoomAuthorization(roomId, offer.fromUserId);
     memorySignalingBus.setOffer(roomId, offer);
     if (this.hasRtdb()) {
       try {
@@ -320,8 +412,11 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
     myUserId: string,
     callback: (offer: WebRtcSignalOffer | null) => void
   ): () => void {
+    this.verifyRoomAuthorization(roomId, myUserId);
+    const initialOffer = memorySignalingBus.getOffer(roomId, myUserId);
+    callback(initialOffer);
     const memoryUnsub = memorySignalingBus.subscribe(`offer:${roomId}:${myUserId}`, (data) => {
-      callback(data as WebRtcSignalOffer);
+      callback(data as WebRtcSignalOffer | null);
     });
 
     let rtdbCallback: ((snap: unknown) => void) | null = null;
@@ -364,6 +459,7 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
    * Sends an SDP answer to the offering peer.
    */
   async sendAnswer(roomId: string, answer: WebRtcSignalAnswer): Promise<void> {
+    this.verifyRoomAuthorization(roomId, answer.fromUserId);
     memorySignalingBus.setAnswer(roomId, answer);
     if (this.hasRtdb()) {
       try {
@@ -383,8 +479,11 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
     myUserId: string,
     callback: (answer: WebRtcSignalAnswer | null) => void
   ): () => void {
+    this.verifyRoomAuthorization(roomId, myUserId);
+    const initialAnswer = memorySignalingBus.getAnswer(roomId, myUserId);
+    callback(initialAnswer);
     const memoryUnsub = memorySignalingBus.subscribe(`answer:${roomId}:${myUserId}`, (data) => {
-      callback(data as WebRtcSignalAnswer);
+      callback(data as WebRtcSignalAnswer | null);
     });
 
     let rtdbCallback: ((snap: unknown) => void) | null = null;
@@ -427,6 +526,7 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
    * Pushes a local ICE candidate for the partner.
    */
   async sendIceCandidate(roomId: string, candidate: WebRtcSignalCandidate): Promise<void> {
+    this.verifyRoomAuthorization(roomId, candidate.fromUserId);
     memorySignalingBus.addCandidate(roomId, candidate);
     if (this.hasRtdb()) {
       try {
@@ -447,6 +547,7 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
     myUserId: string,
     callback: (candidate: WebRtcSignalCandidate) => void
   ): () => void {
+    this.verifyRoomAuthorization(roomId, myUserId);
     const memoryUnsub = memorySignalingBus.subscribe(`candidate:${roomId}:${myUserId}`, (data) => {
       callback(data as WebRtcSignalCandidate);
     });
@@ -489,6 +590,7 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
    * Completely clears signaling entries for the leaving user.
    */
   async clearRoomSignaling(roomId: string, myUserId: string): Promise<void> {
+    this.verifyRoomAuthorization(roomId, myUserId);
     memorySignalingBus.clearRoomUser(roomId, myUserId);
     if (this.hasRtdb()) {
       try {
@@ -511,3 +613,4 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
 }
 
 export const webrtcSignalingService = new FirebaseWebRtcSignalingService();
+

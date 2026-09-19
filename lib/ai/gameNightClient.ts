@@ -3,6 +3,7 @@ import type {
   GameNightVibe,
 } from "./gameNightTypes";
 import { getCuratedGameNight } from "./curatedGameNights";
+import { auth } from "@/lib/firebase/client";
 
 export interface FetchGameNightParams {
   partnerNames?: { p1: string; p2: string };
@@ -37,20 +38,10 @@ export async function fetchGameNightLineup(
     // Client-side authentication token
     if (authToken) {
       headers["Authorization"] = `Bearer ${authToken}`;
-    } else if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("togetherplay_test_user");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (parsed.uid) {
-            headers["Authorization"] = `Bearer uid:${parsed.uid}`;
-          }
-        } catch {
-          // ignore
-        }
-      }
-      if (!headers["Authorization"]) {
-        headers["Authorization"] = "Bearer dev_guest_client";
+    } else {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
       }
     }
 

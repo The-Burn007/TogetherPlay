@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/firebase/client";
-import { doc, getDoc, collection, getDocs, setDoc, query, orderBy } from "firebase/firestore";
+import { getAdminFirestore } from "@/lib/firebase/server/admin";
 import type { Couple } from "@/types/domain";
 import type { CoupleMemory, CreateMemoryPayload } from "@/lib/memories/types";
 import { getDefaultCoupleMemories } from "@/lib/memories/defaultMemories";
-import { extractAuthContext, checkApiRateLimit } from "@/lib/firebase/server/security";
+import { checkApiRateLimit, requireAppCheck } from "@/lib/firebase/server/security";
+import { requireServerAuth, forbiddenResponse } from "@/lib/firebase/server/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -20,29 +20,27 @@ interface RouteParams {
  */
 export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
+    // 1. App Check Attestation
+    const appCheckResult = await requireAppCheck(req);
+    if (!appCheckResult.success) {
+      return appCheckResult.errorResponse;
+    }
+
     const { coupleId } = await params;
-    const { searchParams } = new URL(req.url);
 
     if (!coupleId) {
       return NextResponse.json({ error: "Missing coupleId parameter." }, { status: 400 });
     }
 
-    // 1. Authenticate requesting user
-    let authContext = extractAuthContext(req);
-    const queryUserId = searchParams.get("userId");
-    if (!authContext && queryUserId) {
-      authContext = { uid: queryUserId };
+    // 2. Authenticate requesting user using Firebase Admin ID token verification
+    const authResult = await requireServerAuth(req);
+    if ("errorResponse" in authResult) {
+      return authResult.errorResponse;
     }
-
-    if (!authContext) {
-      return NextResponse.json(
-        { error: "Authentication required to access couple memories." },
-        { status: 401 }
-      );
-    }
+    const authUser = authResult.user;
 
     // 2. Rate limiting (60 requests per minute per user)
-    const rateLimit = checkApiRateLimit(`memories_get_${authContext.uid}`, 60, 60000);
+    const rateLimit = checkApiRateLimit(`memories_get_${authUser.uid}`, 60, 60000);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: "Too many requests. Please wait a moment." },
@@ -51,24 +49,29 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     }
 
     // 3. Fetch couple document to enforce couple membership
-    const coupleRef = doc(db, "couples", coupleId);
-    const coupleSnap = await getDoc(coupleRef);
+    const firestore = getAdminFirestore();
+    const coupleSnap = await firestore.collection("couples").doc(coupleId).get();
 
-    if (coupleSnap.exists()) {
-      const couple = coupleSnap.data() as Couple;
-      if (!Array.isArray(couple.memberIds) || !couple.memberIds.includes(authContext.uid)) {
-        return NextResponse.json(
-          { error: "Access denied. Memories are private to the couple." },
-          { status: 403 }
-        );
-      }
+    if (!coupleSnap.exists) {
+      return NextResponse.json(
+        { error: "Couple sanctuary not found." },
+        { status: 404 }
+      );
+    }
+
+    const couple = coupleSnap.data() as Couple;
+    if (!Array.isArray(couple.memberIds) || !couple.memberIds.includes(authUser.uid)) {
+      return forbiddenResponse("Access denied. Memories are private to the couple.");
     }
 
     // 4. Fetch memories from couples/{coupleId}/memories
     try {
-      const memoriesCollRef = collection(db, "couples", coupleId, "memories");
-      const q = query(memoriesCollRef, orderBy("date", "desc"));
-      const snapshot = await getDocs(q);
+      const snapshot = await firestore
+        .collection("couples")
+        .doc(coupleId)
+        .collection("memories")
+        .orderBy("date", "desc")
+        .get();
 
       if (snapshot.empty) {
         return NextResponse.json({
@@ -102,6 +105,12 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
  */
 export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
+    // 1. App Check Attestation
+    const appCheckResult = await requireAppCheck(req);
+    if (!appCheckResult.success) {
+      return appCheckResult.errorResponse;
+    }
+
     const { coupleId } = await params;
     const body = await req.json();
     const { authorUid, authorName, payload } = body as {
@@ -110,25 +119,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       payload: CreateMemoryPayload;
     };
 
-    // 1. Authenticate caller
-    let authContext = extractAuthContext(req);
-    if (!authContext && authorUid) {
-      authContext = { uid: authorUid };
+    // 2. Authenticate caller strictly using Firebase Admin SDK
+    const authResult = await requireServerAuth(req);
+    if ("errorResponse" in authResult) {
+      return authResult.errorResponse;
     }
+    const authUser = authResult.user;
 
-    if (!authContext) {
-      return NextResponse.json(
-        { error: "Authentication required to record memories." },
-        { status: 401 }
-      );
-    }
-
-    // Enforce that author matches authenticated user
-    if (authorUid && authorUid !== authContext.uid) {
-      return NextResponse.json(
-        { error: "Access denied. Cannot record memories on behalf of another user." },
-        { status: 403 }
-      );
+    // Security check: Client cannot override authenticated UID
+    if (authorUid && authorUid !== authUser.uid) {
+      return forbiddenResponse("Access denied. Cannot record memories on behalf of another user.");
     }
 
     // 2. Input validation
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     // 3. Rate limiting (15 creations per minute per couple/user)
-    const rateLimit = checkApiRateLimit(`memories_post_${authContext.uid}`, 15, 60000);
+    const rateLimit = checkApiRateLimit(`memories_post_${authUser.uid}`, 15, 60000);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: "Memory creation rate limit exceeded. Please wait a moment." },
@@ -159,17 +159,19 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     // 4. Verify couple membership
-    const coupleRef = doc(db, "couples", coupleId);
-    const coupleSnap = await getDoc(coupleRef);
+    const firestore = getAdminFirestore();
+    const coupleSnap = await firestore.collection("couples").doc(coupleId).get();
 
-    if (coupleSnap.exists()) {
-      const couple = coupleSnap.data() as Couple;
-      if (!Array.isArray(couple.memberIds) || !couple.memberIds.includes(authContext.uid)) {
-        return NextResponse.json(
-          { error: "Access denied. Only verified couple members can record memories." },
-          { status: 403 }
-        );
-      }
+    if (!coupleSnap.exists) {
+      return NextResponse.json(
+        { error: "Couple sanctuary not found." },
+        { status: 404 }
+      );
+    }
+
+    const couple = coupleSnap.data() as Couple;
+    if (!Array.isArray(couple.memberIds) || !couple.memberIds.includes(authUser.uid)) {
+      return forbiddenResponse("Access denied. Only verified couple members can record memories.");
     }
 
     // 5. Create memory document
@@ -188,14 +190,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       gameActivity: payload.gameActivity,
       milestoneData: payload.milestoneData,
       relationshipDateData: payload.relationshipDateData,
-      createdBy: authContext.uid,
+      createdBy: authUser.uid,
       authorName: authorName || "Partner",
       createdAt: now,
       updatedAt: now,
     };
 
-    const memoryDocRef = doc(db, "couples", coupleId, "memories", memoryId);
-    await setDoc(memoryDocRef, newMemory);
+    await firestore
+      .collection("couples")
+      .doc(coupleId)
+      .collection("memories")
+      .doc(memoryId)
+      .set(newMemory);
 
     return NextResponse.json({ success: true, memory: newMemory });
   } catch (error: unknown) {

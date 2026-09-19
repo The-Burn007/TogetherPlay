@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Crown, Sparkles, Check, Lock, Compass, Heart } from "lucide-react";
 import type { GameNightActivity, GameNightActivityResult } from "@/lib/ai/gameNightTypes";
 import { gameNightAudio } from "@/lib/ai/gameNightAudio";
+import { secureRandomInt } from "@/lib/utils/crypto";
 
 interface FinalChallengeRunnerProps {
   activity: GameNightActivity;
@@ -39,7 +40,7 @@ export const FinalChallengeRunner: React.FC<FinalChallengeRunnerProps> = ({
 
     setTimeout(() => {
       // 80% chance of synchrony on the grand finale
-      const companionChoice = Math.random() > 0.2 ? idx : (idx + 1) % options.length;
+      const companionChoice = secureRandomInt(1, 100) > 20 ? idx : (idx + 1) % options.length;
       setP2Choice(companionChoice);
       triggerFinalReveal(idx, companionChoice);
     }, 1400);

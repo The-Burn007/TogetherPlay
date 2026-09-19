@@ -87,16 +87,20 @@ export class AuthoritativeGameClient {
 
   /**
    * Submits an action to the authoritative server endpoint.
-   * Automatically generates unique clientActionId and clientTimestamp.
+   * Automatically generates unique clientActionId (or respects preserved clientActionId for idempotency retries).
+   * Tracks in-flight status so actions committed during network disconnect can be reconciled.
    * Accepts optional customUid for multi-session and multi-tab testing.
    */
   async submitAction(
     gameId: string,
     type: GameActionType | string,
     payload: unknown = {},
-    customUid?: string
+    customUid?: string,
+    existingClientActionId?: string
   ): Promise<GameActionResult> {
-    const clientActionId = `act_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const clientActionId =
+      existingClientActionId ||
+      `act_${gameId}_${customUid || "user"}_${type}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const clientTimestamp = Date.now();
 
     const action: GameAction = {
@@ -105,36 +109,107 @@ export class AuthoritativeGameClient {
       type,
       payload,
       clientTimestamp,
+      playerId: customUid,
     };
+
+    // Track in-flight action
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      try {
+        const key = `tp_inflight_${gameId}`;
+        const existing = JSON.parse(window.sessionStorage.getItem(key) || "[]");
+        existing.push({
+          clientActionId,
+          gameId,
+          type,
+          payload,
+          playerId: customUid || "user",
+          submittedAt: clientTimestamp,
+          status: "pending",
+        });
+        window.sessionStorage.setItem(key, JSON.stringify(existing));
+      } catch {
+        // Fallback
+      }
+    }
 
     const token = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
 
-    if (customUid) {
-      headers["Authorization"] = `Bearer uid:${customUid}`;
-    } else if (token) {
+    if (token) {
       headers["Authorization"] = `Bearer ${token}`;
-    } else if (auth.currentUser?.uid) {
-      headers["Authorization"] = `Bearer uid:${auth.currentUser.uid}`;
-    } else if (process.env.NODE_ENV !== "production") {
-      headers["Authorization"] = "Bearer uid:user_alex";
     }
 
-    const response = await fetch("/api/games/action", {
-      method: "POST",
-      headers,
-      body: JSON.stringify(action),
-    });
+    try {
+      const response = await fetch("/api/games/action", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(action),
+      });
 
-    const result = await response.json();
+      const result = await response.json();
 
-    if (!response.ok) {
-      throw new Error(result.error?.message || `Failed to submit action: ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(result.error?.message || `Failed to submit action: ${response.statusText}`);
+      }
+
+      // Remove from in-flight storage on verified commit
+      if (typeof window !== "undefined" && window.sessionStorage) {
+        try {
+          const key = `tp_inflight_${gameId}`;
+          const existing = JSON.parse(window.sessionStorage.getItem(key) || "[]");
+          const filtered = existing.filter((item: { clientActionId: string }) => item.clientActionId !== clientActionId);
+          if (filtered.length > 0) {
+            window.sessionStorage.setItem(key, JSON.stringify(filtered));
+          } else {
+            window.sessionStorage.removeItem(key);
+          }
+        } catch {
+          // Fallback
+        }
+      }
+
+      return result as GameActionResult;
+    } catch (err) {
+      // If network interruption occurs, preserve in-flight record for rehydration reconciliation
+      throw err;
+    }
+  }
+
+  /**
+   * Reconciles in-flight actions against authoritative state.
+   * Returns list of action IDs that were committed by the server during disconnect.
+   */
+  reconcileInFlightActions(gameId: string, state: GameState): string[] {
+    if (!state?.processedActionIds || typeof window === "undefined" || !window.sessionStorage) {
+      return [];
     }
 
-    return result as GameActionResult;
+    const committedIds: string[] = [];
+    try {
+      const key = `tp_inflight_${gameId}`;
+      const existing = JSON.parse(window.sessionStorage.getItem(key) || "[]");
+      const remaining: unknown[] = [];
+
+      for (const item of existing) {
+        if (state.processedActionIds[item.clientActionId]) {
+          committedIds.push(item.clientActionId);
+        } else if (!state.isFinished && state.status !== "game_end") {
+          remaining.push(item);
+        }
+      }
+
+      if (remaining.length > 0) {
+        window.sessionStorage.setItem(key, JSON.stringify(remaining));
+      } else {
+        window.sessionStorage.removeItem(key);
+      }
+    } catch {
+      // Fallback
+    }
+
+    return committedIds;
   }
 
   /**
@@ -145,7 +220,12 @@ export class AuthoritativeGameClient {
     gameId: string
   ): Promise<{ session: GameSession; state: GameState } | null> {
     try {
-      const res = await fetch(`/api/games/session?gameId=${encodeURIComponent(gameId)}`);
+      const token = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      const res = await fetch(`/api/games/session?gameId=${encodeURIComponent(gameId)}`, { headers });
       if (res.ok) {
         return (await res.json()) as { session: GameSession; state: GameState };
       }
@@ -164,9 +244,15 @@ export class AuthoritativeGameClient {
     resetIfFinished = false,
     gameType: GameType = "find_it_first"
   ): Promise<{ session: GameSession; state: GameState }> {
+    const token = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
     const res = await fetch("/api/games/session", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         gameId,
         playerIds,

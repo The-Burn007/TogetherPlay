@@ -30,17 +30,16 @@ export async function fetchAIChallenge(
       }
     }
 
-    // Default fallback token for dev sandbox if not authenticated
-    if (!authToken) {
-      authToken = "uid:user_alex";
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (authToken) {
+      headers["Authorization"] = `Bearer ${authToken}`;
     }
 
     const response = await fetch("/api/ai/challenge", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${authToken}`,
-      },
+      headers,
       body: JSON.stringify(request),
       signal: controller.signal,
     });

@@ -33,8 +33,9 @@ export interface PresenceServiceContract {
 }
 
 export class FirebasePresenceService implements PresenceServiceContract {
-  // In-memory fallback and test baseline
+  // CLASSIFICATION: cache / UI state (Client-side optimistic cache, RTDB is authoritative)
   private memoryPresence: Map<string, UserPresenceRecord> = new Map();
+  // CLASSIFICATION: UI state (Component listener callback sets)
   private subscribers: Map<string, Set<(record: UserPresenceRecord | null) => void>> = new Map();
 
   constructor() {

@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import { Zap, Clock, ShieldAlert, Award } from "lucide-react";
 import type { GameNightActivity, GameNightActivityResult } from "@/lib/ai/gameNightTypes";
 import { gameNightAudio } from "@/lib/ai/gameNightAudio";
+import { secureRandomInt } from "@/lib/utils/crypto";
 
 interface SpeedDuelMiniRunnerProps {
   activity: GameNightActivity;
@@ -34,7 +35,7 @@ export const SpeedDuelMiniRunner: React.FC<SpeedDuelMiniRunnerProps> = ({
       setStage("primed");
 
       // Random trigger delay between 2200ms and 4500ms
-      const delay = 2200 + Math.floor(Math.random() * 2300);
+      const delay = secureRandomInt(2200, 4500);
       triggerTimeoutRef.current = setTimeout(() => {
         setStage("triggered");
         setTriggerTime(Date.now());
@@ -83,8 +84,8 @@ export const SpeedDuelMiniRunner: React.FC<SpeedDuelMiniRunnerProps> = ({
 
       if (player === "p1" && p1ReactMs === null) {
         setP1ReactMs(reaction);
-        // Simulate P2's reaction within 220-380ms
-        const p2Reaction = Math.floor(240 + Math.random() * 160);
+        // Simulate P2's reaction within 240-400ms using secure random integer
+        const p2Reaction = secureRandomInt(240, 400);
         setP2ReactMs(p2Reaction);
         resolveDuel(reaction, p2Reaction);
       }

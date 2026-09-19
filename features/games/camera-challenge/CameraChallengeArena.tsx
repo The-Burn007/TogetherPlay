@@ -29,7 +29,8 @@ import { EventSubmitOverlay } from "./EventSubmitOverlay";
 import { ChallengeResultModal } from "./ChallengeResultModal";
 import { cameraChallengeAudio } from "./cameraChallengeAudio";
 import { authoritativeGameClient } from "@/lib/firebase/services/authoritativeGameClient";
-import { CAMERA_CHALLENGES } from "@/lib/firebase/server/authoritativeGameEngine";
+import { CAMERA_CHALLENGES } from "@/lib/games/definitions";
+import { secureRandomInt } from "@/lib/utils/crypto";
 import type {
   CameraChallengePrompt,
   CameraChallengeStage,
@@ -342,7 +343,7 @@ export const CameraChallengeArena: React.FC<CameraChallengeArenaProps> = ({
   // 6. Rematch / Restart
   const handleRematch = async () => {
     cameraChallengeAudio.playPromptReveal();
-    const randomIdx = Math.floor(Math.random() * CAMERA_CHALLENGES.length);
+    const randomIdx = secureRandomInt(0, CAMERA_CHALLENGES.length - 1);
     setCurrentPromptIndex(randomIdx);
     setCurrentPrompt(CAMERA_CHALLENGES[randomIdx]);
     setCurrentRound(1);

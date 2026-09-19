@@ -165,12 +165,13 @@ export const CoupleRaceArena: React.FC<CoupleRaceArenaProps> = ({
 
     initGame();
 
-    // 2. Real-time Subscriptions
-    const unsubEphemeral = authoritativeGameClient.subscribeToEphemeralState(
+    // 2. Real-time Subscriptions with recovery on reconnect/wake
+    let unsubEphemeral = authoritativeGameClient.subscribeToEphemeralState(
       gameId,
       (updatedState) => {
         if (!isMounted || !updatedState) return;
         setGameState(updatedState);
+        authoritativeGameClient.reconcileInFlightActions(gameId, updatedState);
 
         if (updatedState.status === "game_end") {
           tabletopAudio.playVictory();
@@ -178,7 +179,7 @@ export const CoupleRaceArena: React.FC<CoupleRaceArenaProps> = ({
       }
     );
 
-    const unsubDurable = authoritativeGameClient.subscribeToDurableSession(
+    let unsubDurable = authoritativeGameClient.subscribeToDurableSession(
       gameId,
       (updatedSession) => {
         if (!isMounted || !updatedSession) return;
@@ -186,10 +187,52 @@ export const CoupleRaceArena: React.FC<CoupleRaceArenaProps> = ({
       }
     );
 
+    const onReconnectOrWake = async () => {
+      if (!isMounted) return;
+      try {
+        const agg = await authoritativeGameClient.fetchGameAggregate(gameId);
+        if (agg && isMounted) {
+          setSession(agg.session);
+          setGameState(agg.state);
+          authoritativeGameClient.reconcileInFlightActions(gameId, agg.state);
+          if (agg.state.status === "game_end") {
+            tabletopAudio.playVictory();
+          }
+        }
+        // Re-establish fresh listeners
+        unsubEphemeral();
+        unsubDurable();
+        unsubEphemeral = authoritativeGameClient.subscribeToEphemeralState(gameId, (st) => {
+          if (!isMounted || !st) return;
+          setGameState(st);
+          authoritativeGameClient.reconcileInFlightActions(gameId, st);
+          if (st.status === "game_end") tabletopAudio.playVictory();
+        });
+        unsubDurable = authoritativeGameClient.subscribeToDurableSession(gameId, (sess) => {
+          if (!isMounted || !sess) return;
+          setSession(sess);
+        });
+      } catch {
+        // Fallback
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", onReconnectOrWake);
+      window.addEventListener("focus", onReconnectOrWake);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") onReconnectOrWake();
+      });
+    }
+
     return () => {
       isMounted = false;
       unsubEphemeral();
       unsubDurable();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", onReconnectOrWake);
+        window.removeEventListener("focus", onReconnectOrWake);
+      }
     };
   }, [gameId, activePlayerId]);
 

@@ -2,7 +2,7 @@
   "rules": {
     "gameStates": {
       "$gameId": {
-        ".read": "auth != null",
+        ".read": "auth != null && (data.child('scores').hasChild(auth.uid) || data.child('playerIds/0').val() === auth.uid || data.child('playerIds/1').val() === auth.uid || data.child('playerIds').hasChild(auth.uid) || data.child('allowedPlayers').hasChild(auth.uid))",
         ".write": false
       }
     },
@@ -10,7 +10,7 @@
       "$uid": {
         ".read": "auth != null",
         ".write": "auth != null && auth.uid === $uid",
-        ".validate": "!newData.hasChildren(['lat', 'lng', 'latitude', 'longitude', 'location', 'gps', 'coordinates'])"
+        ".validate": "!newData.hasChild('lat') && !newData.hasChild('lng') && !newData.hasChild('latitude') && !newData.hasChild('longitude') && !newData.hasChild('location') && !newData.hasChild('gps') && !newData.hasChild('coordinates')"
       }
     },
     "notifications": {
@@ -22,28 +22,40 @@
     },
     "webrtc_signaling": {
       "$roomId": {
-        ".read": "auth != null",
+        ".read": "auth != null && (data.child('authorizedUsers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('allowedPlayers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('playerIds').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('playerIds/0').val() === auth.uid || root.child('gameStates').child($roomId).child('playerIds/1').val() === auth.uid)",
+        "authorizedUsers": {
+          ".read": "auth != null && (data.hasChild(auth.uid) || root.child('gameStates').child($roomId).child('allowedPlayers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('playerIds').hasChild(auth.uid))",
+          ".write": false
+        },
         "participants": {
+          ".read": "auth != null && (data.parent().child('authorizedUsers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('allowedPlayers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('playerIds').hasChild(auth.uid))",
           "$userId": {
-            ".write": "auth != null && auth.uid === $userId",
-            ".validate": "newData.hasChildren(['userId', 'joinedAt']) && newData.child('userId').val() === $userId"
+            ".read": "auth != null && (auth.uid === $userId || data.parent().parent().child('authorizedUsers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('allowedPlayers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('playerIds').hasChild(auth.uid))",
+            ".write": "auth != null && auth.uid === $userId && (data.parent().parent().child('authorizedUsers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('allowedPlayers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('playerIds').hasChild(auth.uid))",
+            ".validate": "!newData.exists() || (newData.hasChildren(['userId', 'joinedAt']) && newData.child('userId').val() === $userId)"
           }
         },
         "offers": {
+          ".read": "auth != null && (data.parent().child('authorizedUsers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('allowedPlayers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('playerIds').hasChild(auth.uid))",
           "$toUserId": {
-            ".write": "auth != null && newData.child('fromUserId').val() === auth.uid",
-            ".validate": "newData.hasChildren(['type', 'sdp', 'fromUserId', 'toUserId']) && newData.child('type').val() === 'offer' && newData.child('toUserId').val() === $toUserId"
+            ".read": "auth != null && (auth.uid === $toUserId || data.child('fromUserId').val() === auth.uid)",
+            ".write": "auth != null && (data.parent().parent().child('authorizedUsers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('allowedPlayers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('playerIds').hasChild(auth.uid)) && (!newData.exists() ? (data.child('fromUserId').val() === auth.uid || auth.uid === $toUserId) : (newData.child('fromUserId').val() === auth.uid))",
+            ".validate": "!newData.exists() || (newData.hasChildren(['type', 'sdp', 'fromUserId', 'toUserId']) && newData.child('type').val() === 'offer' && newData.child('toUserId').val() === $toUserId)"
           }
         },
         "answers": {
+          ".read": "auth != null && (data.parent().child('authorizedUsers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('allowedPlayers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('playerIds').hasChild(auth.uid))",
           "$toUserId": {
-            ".write": "auth != null && newData.child('fromUserId').val() === auth.uid",
-            ".validate": "newData.hasChildren(['type', 'sdp', 'fromUserId', 'toUserId']) && newData.child('type').val() === 'answer' && newData.child('toUserId').val() === $toUserId"
+            ".read": "auth != null && (auth.uid === $toUserId || data.child('fromUserId').val() === auth.uid)",
+            ".write": "auth != null && (data.parent().parent().child('authorizedUsers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('allowedPlayers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('playerIds').hasChild(auth.uid)) && (!newData.exists() ? (data.child('fromUserId').val() === auth.uid || auth.uid === $toUserId) : (newData.child('fromUserId').val() === auth.uid))",
+            ".validate": "!newData.exists() || (newData.hasChildren(['type', 'sdp', 'fromUserId', 'toUserId']) && newData.child('type').val() === 'answer' && newData.child('toUserId').val() === $toUserId)"
           }
         },
         "candidates": {
+          ".read": "auth != null && (data.parent().child('authorizedUsers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('allowedPlayers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('playerIds').hasChild(auth.uid))",
           "$toUserId": {
-            ".write": "auth != null && (!newData.exists() || newData.child('fromUserId').val() === auth.uid || data.child('fromUserId').val() === auth.uid)"
+            ".read": "auth != null && (auth.uid === $toUserId || data.child('fromUserId').val() === auth.uid)",
+            ".write": "auth != null && (data.parent().parent().child('authorizedUsers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('allowedPlayers').hasChild(auth.uid) || root.child('gameStates').child($roomId).child('playerIds').hasChild(auth.uid)) && (!newData.exists() || newData.child('fromUserId').val() === auth.uid || data.child('fromUserId').val() === auth.uid)"
           }
         }
       }

@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { z } from "zod";
+import { randomBytes } from "crypto";
 import type {
   AIChallenge,
   AIChallengeCategory,
@@ -9,40 +10,43 @@ import type {
 import { getCuratedChallenge } from "./curatedChallenges";
 
 // ---------------------------------------------------------------------------
-// 1. Zod Schema Validation for AI Output
+// 1. Zod Schema Validation for AI Output (Strict, Defense-in-Depth)
 // ---------------------------------------------------------------------------
-export const AIChallengeOutputSchema = z.object({
-  title: z
-    .string()
-    .min(3, "Title too short")
-    .max(80, "Title too long")
-    .transform((val) => val.trim().replace(/[<>]/g, "")),
-  instructions: z
-    .string()
-    .min(10, "Instructions too short")
-    .max(300, "Instructions too long")
-    .transform((val) => val.trim().replace(/[<>]/g, "")),
-  durationSeconds: z.number().int().min(15).max(300),
-  difficulty: z.enum(["gentle", "playful", "deep", "spicy"]),
-  category: z.enum([
-    "relationship_question",
-    "camera_challenge",
-    "quick_game",
-    "fun_challenge",
-    "conversation_prompt",
-  ]),
-  safetyLevel: z.enum(["family_safe", "intimate_couple"]),
-});
+export const AIChallengeOutputSchema = z
+  .object({
+    title: z
+      .string()
+      .min(3, "Title too short")
+      .max(80, "Title too long")
+      .transform((val) => val.trim().replace(/[<>]/g, "")),
+    instructions: z
+      .string()
+      .min(10, "Instructions too short")
+      .max(300, "Instructions too long")
+      .transform((val) => val.trim().replace(/[<>]/g, "")),
+    durationSeconds: z.number().int().min(15).max(300),
+    difficulty: z.enum(["gentle", "playful", "deep", "spicy"]),
+    category: z.enum([
+      "relationship_question",
+      "camera_challenge",
+      "quick_game",
+      "fun_challenge",
+      "conversation_prompt",
+    ]),
+    safetyLevel: z.enum(["family_safe", "intimate_couple"]),
+  })
+  .strict();
 
 export type ValidatedAIChallengeOutput = z.infer<typeof AIChallengeOutputSchema>;
 
 // ---------------------------------------------------------------------------
-// 2. Input Sanitization & Anti-Prompt-Injection
+// 2. Untrusted Input Cleaning & Normalization
+// Multi-layer defense: Sanitization + XML prompt isolation + Strict Zod schemas
 // ---------------------------------------------------------------------------
 export function sanitizeUntrustedInput(raw?: string | null, maxLength = 80): string {
   if (!raw || typeof raw !== "string") return "";
 
-  // 1. Strip full HTML tags, null bytes, control characters, and special delimiters
+  // 1. Strip full HTML tags, null bytes, control characters, and angle brackets
   let cleaned = raw
     .replace(/<[^>]*>/g, "")
     .replace(/[\u0000-\u001F\u007F-\u009F]/g, "")
@@ -54,9 +58,10 @@ export function sanitizeUntrustedInput(raw?: string | null, maxLength = 80): str
   cleaned = cleaned.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, "[email]");
   cleaned = cleaned.replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, "[phone]");
 
-  // 3. Filter out known prompt injection and extraction phrases
+  // 3. Filter out known prompt injection phrases
   const forbiddenPatterns = [
     /ignore\s+(all\s+)?(previous|prior)\s+instructions/gi,
+    /disregard\s+prior\s+commands/gi,
     /you\s+are\s+now/gi,
     /system\s*:/gi,
     /assistant\s*:/gi,
@@ -67,9 +72,9 @@ export function sanitizeUntrustedInput(raw?: string | null, maxLength = 80): str
     /disregard/gi,
     /bypass/gi,
     /eval\s*\(/gi,
-    /<script/gi,
     /reveal\s+(api\s+)?key/gi,
     /print\s+(the\s+)?(system\s+)?prompt/gi,
+    /system\s+prompt/gi,
     /repeat\s+(everything|all\s+instructions)/gi,
   ];
 
@@ -77,9 +82,10 @@ export function sanitizeUntrustedInput(raw?: string | null, maxLength = 80): str
     cleaned = cleaned.replace(pattern, "[filtered]");
   }
 
-  // 4. Cap length strictly
   return cleaned.slice(0, maxLength);
 }
+
+export const cleanUntrustedInput = sanitizeUntrustedInput;
 
 // ---------------------------------------------------------------------------
 // 3. Lazy Gemini Client Initialization (Fails fast without crashing app)
@@ -109,22 +115,58 @@ export function getGeminiClient(): GoogleGenAI | null {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Rate Limiter (In-Memory Sliding Window per UID / Client IP)
+// 4. Rate Limiting for Challenge Generation (8 per minute max)
+// Dual-mode: Local memory fallback + hookable shared authority for server routes
 // ---------------------------------------------------------------------------
 interface RateLimitRecord {
   timestamps: number[];
 }
 
-const rateLimitMap = new Map<string, RateLimitRecord>();
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 8; // 8 challenges per minute max
-
-export function checkRateLimit(key: string): {
+export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
   resetInSeconds: number;
-} {
+  source?: "shared" | "local_fallback";
+  key?: string;
+}
+
+export type RateLimitPromise = Promise<RateLimitResult> & RateLimitResult;
+
+type RateLimitChecker = (key: string, ip?: string) => RateLimitPromise;
+
+const rateLimitMap = new Map<string, RateLimitRecord>();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 8; // 8 challenges per minute max
+const MAX_RATE_LIMIT_KEYS = 1000;
+
+let customRateLimiter: RateLimitChecker | null = null;
+
+export function setChallengeRateLimiterHook(hook: RateLimitChecker | null): void {
+  customRateLimiter = hook;
+}
+
+export function clearChallengeRateLimitForTesting(): void {
+  rateLimitMap.clear();
+}
+
+/**
+ * Checks challenge generation rate limit.
+ * Supports dual-mode: synchronous property access or awaitable promise.
+ */
+export function checkRateLimit(key: string, ip?: string): RateLimitPromise {
+  if (customRateLimiter) {
+    return customRateLimiter(key, ip);
+  }
+
   const now = Date.now();
+
+  if (rateLimitMap.size > MAX_RATE_LIMIT_KEYS) {
+    for (const [k, v] of rateLimitMap.entries()) {
+      v.timestamps = v.timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+      if (v.timestamps.length === 0) rateLimitMap.delete(k);
+    }
+  }
+
   let record = rateLimitMap.get(key);
 
   if (!record) {
@@ -143,19 +185,26 @@ export function checkRateLimit(key: string): {
       1,
       Math.ceil((oldest + RATE_LIMIT_WINDOW_MS - now) / 1000)
     );
-    return {
+    const result: RateLimitResult = {
       allowed: false,
       remaining: 0,
       resetInSeconds,
+      source: "local_fallback",
+      key,
     };
+    return Object.assign(Promise.resolve(result), result);
   }
 
   record.timestamps.push(now);
-  return {
+  const remaining = MAX_REQUESTS_PER_WINDOW - record.timestamps.length;
+  const result: RateLimitResult = {
     allowed: true,
-    remaining: MAX_REQUESTS_PER_WINDOW - record.timestamps.length,
+    remaining,
     resetInSeconds: 60,
+    source: "local_fallback",
+    key,
   };
+  return Object.assign(Promise.resolve(result), result);
 }
 
 // ---------------------------------------------------------------------------
@@ -288,15 +337,26 @@ ${sanitizedTopic || "none provided"}
     ])) as { text?: string };
 
     const rawJsonText = response.text;
-    if (!rawJsonText) {
+    if (!rawJsonText || rawJsonText.trim().length === 0) {
       throw new Error("EMPTY_GEMINI_RESPONSE");
     }
 
-    const parsedJson = JSON.parse(rawJsonText);
-    const validated = AIChallengeOutputSchema.parse(parsedJson);
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(rawJsonText);
+    } catch {
+      throw new Error("MALFORMED_AI_OUTPUT");
+    }
+
+    const parseResult = AIChallengeOutputSchema.safeParse(parsedJson);
+    if (!parseResult.success) {
+      console.warn("AI Challenge output schema validation failed:", parseResult.error.format());
+      throw new Error("SCHEMA_VIOLATION");
+    }
+    const validated = parseResult.data;
 
     const challenge: AIChallenge = {
-      id: `ai_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      id: `ai_${Date.now()}_${randomBytes(4).toString("hex")}`,
       title: validated.title,
       instructions: validated.instructions,
       durationSeconds: validated.durationSeconds,
@@ -316,13 +376,21 @@ ${sanitizedTopic || "none provided"}
     const errorMsg =
       error instanceof Error ? error.message : "UNKNOWN_AI_ERROR";
     console.warn(
-      `[AIChallenge] Gemini generation failed (${errorMsg}), falling back to curated challenge`
+      `[AIChallenge] Gemini generation fallback (${errorMsg})`
     );
+
+    let fallbackReason = "unexpected_error";
+    if (errorMsg.includes("GEMINI_TIMEOUT")) fallbackReason = "timeout";
+    else if (errorMsg.includes("EMPTY_GEMINI_RESPONSE")) fallbackReason = "empty_response";
+    else if (errorMsg.includes("MALFORMED_AI_OUTPUT")) fallbackReason = "malformed_output";
+    else if (errorMsg.includes("SCHEMA_VIOLATION")) fallbackReason = "schema_violation";
+    else if (errorMsg.includes("gemini_api_key_not_configured")) fallbackReason = "gemini_api_key_not_configured";
+    else fallbackReason = `provider_failure: ${errorMsg}`;
 
     return {
       challenge: getCuratedChallenge(targetCategory, targetDifficulty),
       isFallback: true,
-      fallbackReason: errorMsg,
+      fallbackReason,
     };
   }
 }

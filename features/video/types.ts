@@ -1,4 +1,5 @@
 import type { WebRtcCallStatus, WebRtcParticipant } from "@/types/domain";
+import type { IceConfigurationReport } from "@/lib/webrtc/iceConfig";
 
 export interface VideoDeviceState {
   hasCamera: boolean;
@@ -29,6 +30,9 @@ export interface UseWebRtcVideoCallReturn {
   partnerParticipant: WebRtcParticipant | null;
   isPartnerCameraOn: boolean;
   isPartnerMicOn: boolean;
+
+  // Traversal & Reliability
+  iceReport: IceConfigurationReport;
 
   // Actions
   startCall: (useDemoStream?: boolean) => Promise<void>;

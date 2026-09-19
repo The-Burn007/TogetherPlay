@@ -32,8 +32,13 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   useEffect(() => {
     if (isLoading) return;
 
-    // Direct URL parameter bypass
-    if (!isAuthenticated && typeof window !== "undefined" && window.location.search.includes("bypass=true")) {
+    // Direct URL parameter bypass (strictly impossible in production)
+    if (
+      process.env.NODE_ENV !== "production" &&
+      !isAuthenticated &&
+      typeof window !== "undefined" &&
+      window.location.search.includes("bypass=true")
+    ) {
       signInAsTestUser("alex");
       return;
     }

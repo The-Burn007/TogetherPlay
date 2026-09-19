@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   validateActionPayloadStructure,
   verifyAppCheckToken,
@@ -9,6 +9,88 @@ import { submitGameAction, ActionValidationError } from "@/lib/firebase/server/s
 import { ServerGameRepository } from "@/lib/firebase/server/gameRepository";
 import { sanitizeUntrustedInput } from "@/lib/ai/geminiChallengeService";
 import type { GameSession, GameState, GameAction } from "@/types/domain";
+
+// Mock Firebase Admin SDK
+vi.mock("@/lib/firebase/server/admin", () => ({
+  getAdminAuth: vi.fn(() => ({
+    verifyIdToken: vi.fn(async (token: string) => {
+      if (token && token.startsWith("valid_token_")) {
+        const uid = token.replace("valid_token_", "");
+        return {
+          uid,
+          sub: uid,
+          email: `${uid}@example.com`,
+          email_verified: true,
+          auth_time: Math.floor(Date.now() / 1000),
+        };
+      }
+      throw new Error("Invalid token");
+    }),
+  })),
+  getAdminAppCheck: vi.fn(() => ({
+    verifyToken: vi.fn(async (token: string) => {
+      if (token === "valid-test-app-check-token" || token === "valid_app_check_jwt") {
+        return {
+          appId: "togetherplay-app-check-verified",
+          token: {
+            iss: "https://firebaseappcheck.googleapis.com/223821505952",
+            sub: "togetherplay-app-check-verified",
+            aud: ["projects/rational-drake-mlcf1", "projects/223821505952"],
+            exp: Math.floor(Date.now() / 1000) + 3600,
+            iat: Math.floor(Date.now() / 1000) - 60,
+            app_id: "togetherplay-app-check-verified",
+          },
+          alreadyConsumed: false,
+        };
+      }
+      if (token === "expired-token") {
+        const error = new Error("The provided App Check token has expired.") as {
+          code?: string;
+          message?: string;
+        };
+        error.code = "app-check/token-expired";
+        throw error;
+      }
+      if (token === "revoked-token") {
+        const error = new Error("The provided App Check token has been revoked.") as {
+          code?: string;
+          message?: string;
+        };
+        error.code = "app-check/token-revoked";
+        throw error;
+      }
+      if (token === "fake-signature-token") {
+        const error = new Error(
+          "The provided App Check token has 'kid' claim which does not correspond to a known public key."
+        ) as { code?: string; message?: string };
+        error.code = "app-check/invalid-argument";
+        throw error;
+      }
+      if (token === "wrong-project-token") {
+        return {
+          appId: "togetherplay-app-check-verified",
+          token: {
+            iss: "https://firebaseappcheck.googleapis.com/999999999999",
+            sub: "togetherplay-app-check-verified",
+            aud: ["projects/wrong-project-id"],
+            exp: Math.floor(Date.now() / 1000) + 3600,
+            iat: Math.floor(Date.now() / 1000) - 60,
+            app_id: "togetherplay-app-check-verified",
+          },
+          alreadyConsumed: false,
+        };
+      }
+      const error = new Error("The provided App Check token is malformed or invalid.") as {
+        code?: string;
+        message?: string;
+      };
+      error.code = "app-check/invalid-argument";
+      throw error;
+    }),
+  })),
+  getAdminFirestore: vi.fn(() => ({})),
+  getAdminApp: vi.fn(() => ({})),
+}));
 
 describe("TogetherPlay Security Hardening & Audit Verification", () => {
   let repository: ServerGameRepository;
@@ -152,27 +234,26 @@ describe("TogetherPlay Security Hardening & Audit Verification", () => {
   });
 
   describe("2. Authentication & Header Extraction", () => {
-    it("extracts authenticated user context from Bearer token", () => {
+    it("extracts authenticated user context from valid Bearer token", async () => {
       const req = new Request("http://localhost/api/test", {
-        headers: { Authorization: "Bearer user_test_123" },
+        headers: { Authorization: "Bearer valid_token_user_test_123" },
       });
-      const ctx = extractAuthContext(req);
+      const ctx = await extractAuthContext(req);
       expect(ctx).not.toBeNull();
       expect(ctx?.uid).toBe("user_test_123");
     });
 
-    it("extracts authenticated user context from uid: prefix token", () => {
+    it("rejects insecure fake uid: prefix token", async () => {
       const req = new Request("http://localhost/api/test", {
         headers: { Authorization: "Bearer uid:user_custom_456" },
       });
-      const ctx = extractAuthContext(req);
-      expect(ctx).not.toBeNull();
-      expect(ctx?.uid).toBe("user_custom_456");
+      const ctx = await extractAuthContext(req);
+      expect(ctx).toBeNull();
     });
 
-    it("returns null when no Authorization header is present", () => {
+    it("returns null when no Authorization header is present", async () => {
       const req = new Request("http://localhost/api/test");
-      const ctx = extractAuthContext(req);
+      const ctx = await extractAuthContext(req);
       expect(ctx).toBeNull();
     });
   });
@@ -181,18 +262,47 @@ describe("TogetherPlay Security Hardening & Audit Verification", () => {
     it("rejects missing or empty App Check tokens", async () => {
       const result = await verifyAppCheckToken("");
       expect(result.valid).toBe(false);
+      expect(result.code).toBe("MISSING_APP_CHECK");
       expect(result.reason).toContain("Missing App Check token");
     });
 
     it("rejects known invalid or malformed App Check tokens", async () => {
       const result = await verifyAppCheckToken("invalid-token");
       expect(result.valid).toBe(false);
-      expect(result.reason).toContain("invalid or expired");
+      expect(result.code).toBe("MALFORMED_APP_CHECK");
     });
 
-    it("accepts valid test token", async () => {
+    it("rejects expired App Check tokens", async () => {
+      const result = await verifyAppCheckToken("expired-token");
+      expect(result.valid).toBe(false);
+      expect(result.code).toBe("APP_CHECK_EXPIRED");
+      expect(result.reason).toContain("expired");
+    });
+
+    it("rejects revoked App Check tokens", async () => {
+      const result = await verifyAppCheckToken("revoked-token");
+      expect(result.valid).toBe(false);
+      expect(result.code).toBe("APP_CHECK_REVOKED");
+      expect(result.reason).toContain("revoked");
+    });
+
+    it("rejects tokens with invalid signatures or unknown kid", async () => {
+      const result = await verifyAppCheckToken("fake-signature-token");
+      expect(result.valid).toBe(false);
+      expect(result.code).toBe("INVALID_APP_CHECK_SIGNATURE");
+    });
+
+    it("rejects tokens with invalid project audience claims", async () => {
+      const result = await verifyAppCheckToken("wrong-project-token");
+      expect(result.valid).toBe(false);
+      expect(result.code).toBe("INVALID_APP_CHECK_CLAIMS");
+    });
+
+    it("accepts valid token verified by Admin SDK", async () => {
       const result = await verifyAppCheckToken("valid-test-app-check-token");
       expect(result.valid).toBe(true);
+      expect(result.appId).toBe("togetherplay-app-check-verified");
+      expect(result.token?.sub).toBe("togetherplay-app-check-verified");
     });
   });
 

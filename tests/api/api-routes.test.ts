@@ -13,6 +13,112 @@ vi.mock("@/lib/firebase/client", () => ({
   auth: { currentUser: { uid: "user_mock_api" } },
 }));
 
+// Mock Firebase Admin SDK for server authentication and Firestore
+const mockAdminFirestore = {
+  runTransaction: vi.fn(async (updateFunction: (transaction: any) => Promise<any>) => {
+    const tx = {
+      get: vi.fn(async (docRef: any) => docRef.get()),
+      update: vi.fn(async (docRef: any, data: any) => docRef.update(data)),
+      set: vi.fn(async (docRef: any, data: any, opts: any) => docRef.set(data, opts)),
+      delete: vi.fn(async (docRef: any) => docRef.delete?.()),
+    };
+    return updateFunction(tx);
+  }),
+  collection: vi.fn((colName: string) => ({
+    doc: vi.fn((docId: string) => {
+      const getDocData = () => {
+        if (colName === "coupleInvites") {
+          if (docId === "expired_invite") {
+            return {
+              exists: true,
+              data: () => ({
+                inviteId: "expired_invite",
+                coupleId: "cpl_1",
+                inviterId: "user_a",
+                status: "pending",
+                tokenHash: "abc",
+                expiresAt: new Date(Date.now() - 10000).toISOString(),
+              }),
+            };
+          }
+          if (docId === "used_invite") {
+            return {
+              exists: true,
+              data: () => ({
+                inviteId: "used_invite",
+                coupleId: "cpl_1",
+                inviterId: "user_a",
+                status: "accepted",
+                tokenHash: "abc",
+                expiresAt: new Date(Date.now() + 100000).toISOString(),
+              }),
+            };
+          }
+        }
+        if (colName === "couples" && docId === "cpl_demo") {
+          return {
+            exists: true,
+            data: () => ({
+              coupleId: "cpl_demo",
+              name: "Demo Couple",
+              memberIds: ["user_a", "user_b", "user_authed_1"],
+            }),
+          };
+        }
+        return {
+          exists: false,
+          data: () => null,
+        };
+      };
+
+      return {
+        get: vi.fn(async () => getDocData()),
+        set: vi.fn().mockResolvedValue(undefined),
+        update: vi.fn().mockResolvedValue(undefined),
+        collection: vi.fn((subCol: string) => ({
+          doc: vi.fn((subDocId: string) => ({
+            get: vi.fn(async () => ({ exists: false, data: () => null })),
+            set: vi.fn().mockResolvedValue(undefined),
+          })),
+          orderBy: vi.fn(() => ({
+            get: vi.fn(async () => ({ empty: true, docs: [] })),
+          })),
+          get: vi.fn(async () => ({ empty: true, docs: [] })),
+        })),
+      };
+    }),
+  })),
+};
+
+vi.mock("@/lib/firebase/server/admin", () => ({
+  getAdminAuth: vi.fn(() => ({
+    verifyIdToken: vi.fn(async (token: string) => {
+      if (token && (token.startsWith("valid_token_") || token === "valid_id_token")) {
+        const uid = token.startsWith("valid_token_") ? token.replace("valid_token_", "") : "user_authed_1";
+        return {
+          uid,
+          sub: uid,
+          email: `${uid}@example.com`,
+          email_verified: true,
+          auth_time: Math.floor(Date.now() / 1000),
+        };
+      }
+      const err = new Error("Invalid or unverified Firebase ID token.");
+      (err as unknown as { code: string }).code = "auth/invalid-id-token";
+      throw err;
+    }),
+  })),
+  getAdminFirestore: vi.fn(() => mockAdminFirestore),
+  getAdminDatabase: vi.fn(() => ({
+    ref: vi.fn(() => ({
+      get: vi.fn(async () => ({ exists: () => false, val: () => null })),
+      set: vi.fn().mockResolvedValue(undefined),
+    })),
+  })),
+  getAdminApp: vi.fn(() => ({})),
+  isAdminFirebaseConfigured: vi.fn(() => true),
+}));
+
 // Mock AI Services for predictable, rapid API testing
 vi.mock("@/lib/ai/geminiChallengeService", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/ai/geminiChallengeService")>();
@@ -140,7 +246,7 @@ describe("API Layer: Route Handlers Verification", () => {
       const req = new NextRequest("http://localhost:3000/api/games/action", {
         method: "POST",
         headers: {
-          authorization: "Bearer uid:user_authed_1",
+          authorization: "Bearer valid_token_user_authed_1",
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -159,7 +265,7 @@ describe("API Layer: Route Handlers Verification", () => {
       const req = new NextRequest("http://localhost:3000/api/games/action", {
         method: "POST",
         headers: {
-          authorization: "Bearer uid:user_authed_1",
+          authorization: "Bearer valid_token_user_authed_1",
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -182,7 +288,10 @@ describe("API Layer: Route Handlers Verification", () => {
     it("creates an authoritative session cleanly with 201 status", async () => {
       const req = new NextRequest("http://localhost:3000/api/games/session", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          authorization: "Bearer valid_token_user_a",
+          "content-type": "application/json",
+        },
         body: JSON.stringify({
           coupleId: "cpl_valid_1",
           gameType: "find_it_first",
@@ -204,7 +313,10 @@ describe("API Layer: Route Handlers Verification", () => {
       // First create a session to query
       const createReq = new NextRequest("http://localhost:3000/api/games/session", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          authorization: "Bearer valid_token_user_a",
+          "content-type": "application/json",
+        },
         body: JSON.stringify({
           gameId: "test_session_query_1",
           coupleId: "cpl_valid_1",
@@ -214,7 +326,11 @@ describe("API Layer: Route Handlers Verification", () => {
       });
       await gameSessionRoute(createReq);
 
-      const req = new NextRequest("http://localhost:3000/api/games/session?gameId=test_session_query_1");
+      const req = new NextRequest("http://localhost:3000/api/games/session?gameId=test_session_query_1", {
+        headers: {
+          authorization: "Bearer valid_token_user_a",
+        },
+      });
       const response = await getGameSessionRoute(req);
       expect(response.status).toBe(200);
       const json = await response.json();
@@ -227,7 +343,10 @@ describe("API Layer: Route Handlers Verification", () => {
     it("rejects invitation acceptance when missing required parameters with 400", async () => {
       const req = new NextRequest("http://localhost:3000/api/couples/accept-invite", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          authorization: "Bearer valid_token_user_b",
+          "content-type": "application/json",
+        },
         body: JSON.stringify({ inviteId: "inv_123" }), // missing code and acceptingUserId
       });
 
@@ -240,7 +359,10 @@ describe("API Layer: Route Handlers Verification", () => {
     it("rejects expired invitations with 410 Gone", async () => {
       const req = new NextRequest("http://localhost:3000/api/couples/accept-invite", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          authorization: "Bearer valid_token_user_b",
+          "content-type": "application/json",
+        },
         body: JSON.stringify({
           inviteId: "expired_invite",
           code: "SANCT-TEST-CODE",
@@ -257,7 +379,10 @@ describe("API Layer: Route Handlers Verification", () => {
     it("rejects already accepted invitations with 409 Conflict", async () => {
       const req = new NextRequest("http://localhost:3000/api/couples/accept-invite", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          authorization: "Bearer valid_token_user_b",
+          "content-type": "application/json",
+        },
         body: JSON.stringify({
           inviteId: "used_invite",
           code: "SANCT-TEST-CODE",
@@ -276,7 +401,7 @@ describe("API Layer: Route Handlers Verification", () => {
     it("returns curated memories for couples on GET", async () => {
       const req = new NextRequest("http://localhost:3000/api/couples/cpl_demo/memories", {
         headers: {
-          authorization: "Bearer uid:user_a",
+          authorization: "Bearer valid_token_user_a",
         },
       });
 
@@ -310,7 +435,7 @@ describe("API Layer: Route Handlers Verification", () => {
       const req = new NextRequest("http://localhost:3000/api/couples/cpl_demo/memories", {
         method: "POST",
         headers: {
-          authorization: "Bearer uid:user_a",
+          authorization: "Bearer valid_token_user_a",
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -335,7 +460,7 @@ describe("API Layer: Route Handlers Verification", () => {
       const req = new NextRequest("http://localhost:3000/api/couples/cpl_demo/memories", {
         method: "POST",
         headers: {
-          authorization: "Bearer uid:user_a",
+          authorization: "Bearer valid_token_user_a",
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -367,7 +492,7 @@ describe("API Layer: Route Handlers Verification", () => {
       const req = new NextRequest("http://localhost:3000/api/ai/challenge", {
         method: "POST",
         headers: {
-          authorization: "Bearer uid:user_alex",
+          authorization: "Bearer valid_token_user_alex",
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -389,7 +514,7 @@ describe("API Layer: Route Handlers Verification", () => {
       const req = new NextRequest("http://localhost:3000/api/ai/game-night", {
         method: "POST",
         headers: {
-          authorization: "Bearer uid:user_alex",
+          authorization: "Bearer valid_token_user_alex",
           "content-type": "application/json",
         },
         body: JSON.stringify({

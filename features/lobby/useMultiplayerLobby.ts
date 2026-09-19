@@ -40,16 +40,120 @@ const DEFAULT_PLAYER_B: LobbyPlayerInfo = {
   latencyMs: 28,
 };
 
+function getInitialSessionId(): string {
+  if (typeof window !== "undefined") {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlSid = urlParams.get("sessionId");
+      if (urlSid) return urlSid;
+      const stored = window.sessionStorage?.getItem("tp_lobby_session_id");
+      if (stored) return stored;
+    } catch {
+      // Fallback
+    }
+  }
+  return "tp-session-lobby";
+}
+
 export function useMultiplayerLobby(initialGameId: GameType = "find_it_first") {
   const [selectedGameId, setSelectedGameId] = useState<GameType>(initialGameId);
   const [lobbyState, setLobbyState] = useState<LobbyFlowState>("waiting");
-  const [sessionId, setSessionId] = useState<string>("tp-session-" + Math.random().toString(36).substring(2, 7));
+  const [sessionId, setSessionId] = useState<string>(getInitialSessionId);
   const [playerA, setPlayerA] = useState<LobbyPlayerInfo>(DEFAULT_PLAYER_A);
   const [playerB, setPlayerB] = useState<LobbyPlayerInfo>(DEFAULT_PLAYER_B);
   const [countdown, setCountdown] = useState<number>(3);
   const [lastWhisperSent, setLastWhisperSent] = useState<string | null>(null);
 
   const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Persist session ID to survive browser refresh
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      try {
+        window.sessionStorage.setItem("tp_lobby_session_id", sessionId);
+      } catch {
+        // Fallback
+      }
+    }
+  }, [sessionId]);
+
+  // Rehydrate authoritative room session on mount, refresh, and reconnect
+  const rehydrateLobbySession = useCallback(async () => {
+    try {
+      const remote = (await roomService.getSession(sessionId)) || (await roomService.getActiveSession("cpl_london_tokyo"));
+      if (remote) {
+        if (remote.gameId && remote.gameId !== sessionId) {
+          setSessionId(remote.gameId);
+        }
+        if (remote.gameType) {
+          setSelectedGameId(remote.gameType);
+        }
+
+        const isBJoined = remote.playerIds?.includes("user_sam") ?? false;
+        const isAReady = remote.readyPlayerIds?.includes("user_alex") ?? false;
+        const isBReady = remote.readyPlayerIds?.includes("user_sam") ?? false;
+
+        setPlayerA((prev) => ({ ...prev, isReady: isAReady }));
+        setPlayerB((prev) => ({ ...prev, isInLobby: isBJoined, isReady: isBReady }));
+
+        // Authoritatively determine lobby phase
+        if (remote.status === "countdown" || (isAReady && isBReady)) {
+          setLobbyState("starting");
+        } else if (remote.status === "ready" || isAReady || isBReady) {
+          setLobbyState("ready");
+        } else if (isBJoined) {
+          setLobbyState("partner_joined");
+        } else {
+          setLobbyState("waiting");
+        }
+      }
+    } catch (err) {
+      console.warn("[MultiplayerLobby] Rehydration error:", err);
+    }
+  }, [sessionId]);
+
+  // Live subscription and reconnect lifecycle
+  useEffect(() => {
+    rehydrateLobbySession();
+
+    const unsub = roomService.subscribeToSession(sessionId, (remote) => {
+      if (!remote) return;
+      if (remote.gameType) setSelectedGameId(remote.gameType);
+
+      const isBJoined = remote.playerIds?.includes("user_sam") ?? false;
+      const isAReady = remote.readyPlayerIds?.includes("user_alex") ?? false;
+      const isBReady = remote.readyPlayerIds?.includes("user_sam") ?? false;
+
+      setPlayerA((prev) => ({ ...prev, isReady: isAReady }));
+      setPlayerB((prev) => ({ ...prev, isInLobby: isBJoined, isReady: isBReady }));
+
+      if (remote.status === "countdown" || (isAReady && isBReady)) {
+        setLobbyState("starting");
+      } else if (remote.status === "ready" || isAReady || isBReady) {
+        setLobbyState("ready");
+      } else if (isBJoined) {
+        setLobbyState("partner_joined");
+      }
+    });
+
+    const onOnline = () => rehydrateLobbySession();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") rehydrateLobbySession();
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", onOnline);
+      document.addEventListener("visibilitychange", onVisibility);
+    }
+
+    return () => {
+      unsub();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", onOnline);
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
+    };
+  }, [sessionId, rehydrateLobbySession]);
 
   // Connection metadata reflecting current state
   const connectionStats: LobbyConnectionStats = {

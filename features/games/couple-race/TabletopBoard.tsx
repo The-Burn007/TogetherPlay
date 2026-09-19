@@ -17,7 +17,7 @@ import {
   Maximize2,
   Info,
 } from "lucide-react";
-import { COUPLE_RACE_TILES } from "@/lib/firebase/server/authoritativeGameEngine";
+import { COUPLE_RACE_TILES } from "@/lib/games/definitions";
 import { GamePieceToken } from "./GamePieceToken";
 import { PLAYER_METAS, type TabletopCameraMode } from "./types";
 import type {

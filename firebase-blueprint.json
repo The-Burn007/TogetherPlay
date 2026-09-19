@@ -299,6 +299,33 @@
         }
       },
       "required": ["id", "coupleId", "type", "title", "date", "context", "createdBy", "createdAt"]
+    },
+    "RateLimitRecord": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "Rate limit identifier key"
+        },
+        "timestamps": {
+          "type": "array",
+          "items": { "type": "number" },
+          "description": "Sliding window timestamp reservations"
+        },
+        "ip": {
+          "type": "string",
+          "description": "Client IP address for network-tier protection"
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Epoch timestamp of last update"
+        },
+        "expiresAt": {
+          "type": "number",
+          "description": "Epoch timestamp when current window expires"
+        }
+      },
+      "required": ["key", "timestamps", "updatedAt", "expiresAt"]
     }
   },
   "firestore": {
@@ -325,6 +352,10 @@
     "/couples/{coupleId}/memories/{memoryId}": {
       "schema": "CoupleMemory",
       "description": "Private couple visual archive and relationship memory artifacts"
+    },
+    "/rateLimits/{rateLimitId}": {
+      "schema": "RateLimitRecord",
+      "description": "Shared server-authoritative rate limiter documents across server instances"
     }
   }
 }

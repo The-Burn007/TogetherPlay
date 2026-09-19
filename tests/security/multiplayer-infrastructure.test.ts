@@ -1,7 +1,49 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { submitGameAction, ActionValidationError } from "@/lib/firebase/server/submitGameAction";
 import { ServerGameRepository } from "@/lib/firebase/server/gameRepository";
 import type { GameSession, GameAction, GameState } from "@/types/domain";
+
+// Mock Firebase Admin SDK for App Check & Auth verification
+vi.mock("@/lib/firebase/server/admin", () => ({
+  getAdminAuth: vi.fn(() => ({
+    verifyIdToken: vi.fn(async (token: string) => {
+      const uid = token.replace("valid_token_", "");
+      return {
+        uid,
+        sub: uid,
+        email: `${uid}@example.com`,
+        email_verified: true,
+        auth_time: Math.floor(Date.now() / 1000),
+      };
+    }),
+  })),
+  getAdminAppCheck: vi.fn(() => ({
+    verifyToken: vi.fn(async (token: string) => {
+      if (token === "valid-test-app-check-token" || token === "valid-app-check-token") {
+        return {
+          appId: "1:223821505952:web:5d674869094ba785d1b0c5",
+          token: {
+            iss: "https://firebaseappcheck.googleapis.com/223821505952",
+            sub: "1:223821505952:web:5d674869094ba785d1b0c5",
+            aud: ["projects/rational-drake-mlcf1", "projects/223821505952"],
+            exp: Math.floor(Date.now() / 1000) + 3600,
+            iat: Math.floor(Date.now() / 1000) - 60,
+            app_id: "1:223821505952:web:5d674869094ba785d1b0c5",
+          },
+          alreadyConsumed: false,
+        };
+      }
+      const error = new Error("Invalid or expired App Check token") as {
+        code?: string;
+        message?: string;
+      };
+      error.code = "app-check/invalid-argument";
+      throw error;
+    }),
+  })),
+  getAdminFirestore: vi.fn(() => ({})),
+  getAdminApp: vi.fn(() => ({})),
+}));
 
 describe("TogetherPlay Multiplayer Infrastructure & Security Architecture", () => {
   let repository: ServerGameRepository;

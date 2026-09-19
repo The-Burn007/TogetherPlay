@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { MessageSquare, Check, Eye, HelpCircle, Heart, Lock } from "lucide-react";
 import type { GameNightActivity, GameNightActivityResult } from "@/lib/ai/gameNightTypes";
 import { gameNightAudio } from "@/lib/ai/gameNightAudio";
+import { secureRandomInt } from "@/lib/utils/crypto";
 
 interface QuickQuestionRunnerProps {
   activity: GameNightActivity;
@@ -40,8 +41,8 @@ export const QuickQuestionRunner: React.FC<QuickQuestionRunnerProps> = ({
     // If P2 hasn't chosen yet, simulate or allow P2 choice
     if (p2Choice === null) {
       setTimeout(() => {
-        // Deterministic companion choice (either match or complementary)
-        const simChoice = Math.random() > 0.35 ? index : (index + 1) % options.length;
+        // Cryptographically random companion choice (either match or complementary)
+        const simChoice = secureRandomInt(1, 100) > 35 ? index : (index + 1) % options.length;
         setP2Choice(simChoice);
         triggerReveal(index, simChoice);
       }, 1200);

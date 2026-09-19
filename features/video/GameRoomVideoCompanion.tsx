@@ -30,6 +30,8 @@ interface GameRoomVideoCompanionProps {
   partnerDisplayName?: string;
   partnerCity?: string;
   className?: string;
+  isGameEnd?: boolean;
+  gameStatus?: string;
 }
 
 export const GameRoomVideoCompanion: React.FC<GameRoomVideoCompanionProps> = ({
@@ -41,6 +43,8 @@ export const GameRoomVideoCompanion: React.FC<GameRoomVideoCompanionProps> = ({
   partnerDisplayName = "Sam",
   partnerCity = "Tokyo",
   className = "",
+  isGameEnd = false,
+  gameStatus,
 }) => {
   const [isMinimized, setIsMinimized] = useState(false);
   const [dismissPermissionWarning, setDismissPermissionWarning] = useState(false);
@@ -62,6 +66,7 @@ export const GameRoomVideoCompanion: React.FC<GameRoomVideoCompanionProps> = ({
     partnerParticipant,
     isPartnerCameraOn,
     isPartnerMicOn,
+    iceReport,
     startCall,
     leaveCall,
     toggleCamera,
@@ -73,6 +78,8 @@ export const GameRoomVideoCompanion: React.FC<GameRoomVideoCompanionProps> = ({
     partnerId,
     myDisplayName,
     myCity,
+    isGameEnd,
+    gameStatus,
   });
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -225,15 +232,23 @@ export const GameRoomVideoCompanion: React.FC<GameRoomVideoCompanionProps> = ({
                 ? "bg-emerald-950/60 border-emerald-800/40 text-emerald-400"
                 : isReconnecting
                 ? "bg-amber-950/60 border-amber-800/40 text-amber-400 animate-pulse"
+                : status === "unauthorized"
+                ? "bg-rose-950/60 border-rose-800/40 text-rose-400"
+                : status === "partner_disconnected"
+                ? "bg-amber-950/60 border-amber-800/40 text-amber-400"
                 : "bg-stone-800/80 border-stone-700 text-stone-400"
             }`}
           >
             {isConnected
-              ? "P2P Live"
+              ? (iceReport.isProductionReliable ? "P2P (TURN)" : "P2P (STUN)")
               : isReconnecting
               ? "Reconnecting..."
               : isConnecting
-              ? "Connecting P2P..."
+              ? "Connecting..."
+              : status === "unauthorized"
+              ? "Unauthorized"
+              : status === "partner_disconnected"
+              ? "Partner Left"
               : status}
           </span>
         </div>

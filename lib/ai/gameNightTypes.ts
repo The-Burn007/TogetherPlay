@@ -44,6 +44,7 @@ export interface GameNightActivity {
 export interface GameNightLineup {
   id: string;
   theme: string;
+  title?: string;
   themeDescription: string;
   hostWelcome: string;
   activities: GameNightActivity[];
@@ -83,35 +84,59 @@ export interface GameNightOverallResult {
 // ---------------------------------------------------------------------------
 // Zod Schemas for Server Validation
 // ---------------------------------------------------------------------------
-export const GameNightPromptDataSchema = z.object({
-  prompt: z.string().min(5).max(300),
-  options: z.array(z.string().min(1).max(100)).optional(),
-  category: z.string().min(2).max(50),
-  guidance: z.string().min(5).max(200),
-});
+export const GameNightPromptDataSchema = z
+  .object({
+    prompt: z.string().min(5).max(300),
+    options: z.array(z.string().min(1).max(100)).optional(),
+    category: z.string().min(2).max(50),
+    guidance: z.string().min(5).max(200),
+  })
+  .strict();
 
-export const GameNightActivitySchema = z.object({
-  id: z.string(),
-  roundNumber: z.number().int().min(1).max(10),
-  type: z.enum([
-    "find_it_first",
-    "quick_question",
-    "camera_challenge",
-    "speed_duel",
-    "final_challenge",
-  ]),
-  title: z.string().min(3).max(80),
-  subtitle: z.string().min(3).max(120),
-  hostIntro: z.string().min(10).max(280),
-  estimatedMinutes: z.number().min(1).max(15),
-  promptData: GameNightPromptDataSchema,
-});
+export const GameNightActivitySchema = z
+  .object({
+    id: z.string().optional(),
+    roundNumber: z.number().int().min(1).max(10),
+    type: z.enum([
+      "find_it_first",
+      "quick_question",
+      "camera_challenge",
+      "speed_duel",
+      "final_challenge",
+    ]),
+    title: z.string().min(3).max(80),
+    subtitle: z.string().min(3).max(120),
+    hostIntro: z.string().min(10).max(280),
+    estimatedMinutes: z.number().min(1).max(15),
+    promptData: GameNightPromptDataSchema,
+    status: z.enum(["upcoming", "current", "completed"]).optional(),
+  })
+  .strict();
 
-export const GameNightLineupSchema = z.object({
-  theme: z.string().min(3).max(80),
-  themeDescription: z.string().min(10).max(250),
-  hostWelcome: z.string().min(20).max(400),
-  activities: z.array(GameNightActivitySchema).length(5),
-});
+export const GameNightLineupSchema = z
+  .object({
+    id: z.string().optional(),
+    theme: z.string().min(3).max(80),
+    title: z.string().min(3).max(80).optional(),
+    themeDescription: z.string().min(10).max(250),
+    hostWelcome: z.string().min(20).max(400),
+    activities: z.array(GameNightActivitySchema).length(5),
+    totalRounds: z.number().optional(),
+    isAIGenerated: z.boolean().optional(),
+    createdAt: z.string().optional(),
+    partnerNames: z
+      .object({
+        p1: z.string(),
+        p2: z.string(),
+      })
+      .optional(),
+    partnerCities: z
+      .object({
+        p1: z.string(),
+        p2: z.string(),
+      })
+      .optional(),
+  })
+  .strict();
 
 export type ValidatedGameNightLineup = z.infer<typeof GameNightLineupSchema>;

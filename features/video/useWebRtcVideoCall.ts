@@ -1,27 +1,33 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type {
   WebRtcCallStatus,
   WebRtcParticipant,
 } from "@/types/domain";
-import { webrtcSignalingService } from "@/lib/firebase/services/webrtcSignaling";
+import {
+  webrtcSignalingService,
+  SignalingSecurityError,
+} from "@/lib/firebase/services/webrtcSignaling";
+import {
+  getIceConfiguration,
+  fetchServerIceConfiguration,
+  type IceConfigurationReport,
+} from "@/lib/webrtc/iceConfig";
+import { auth } from "@/lib/firebase/client";
+import { onAuthStateChanged } from "firebase/auth";
 import { createAntiquarianDemoStream } from "./demoStreamGenerator";
 import type { UseWebRtcVideoCallReturn } from "./types";
 
-interface UseWebRtcVideoCallParams {
+export interface UseWebRtcVideoCallParams {
   roomId: string;
   myUserId: string;
   partnerId: string;
   myDisplayName?: string;
   myCity?: string;
+  isGameEnd?: boolean;
+  gameStatus?: string;
 }
-
-const ICE_SERVERS: RTCIceServer[] = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-  { urls: "stun:stun2.l.google.com:19302" },
-];
 
 export function useWebRtcVideoCall({
   roomId,
@@ -29,6 +35,8 @@ export function useWebRtcVideoCall({
   partnerId,
   myDisplayName = "Alex",
   myCity = "London",
+  isGameEnd = false,
+  gameStatus,
 }: UseWebRtcVideoCallParams): UseWebRtcVideoCallReturn {
   // Call status & Errors
   const [status, setStatus] = useState<WebRtcCallStatus>("idle");
@@ -49,18 +57,41 @@ export function useWebRtcVideoCall({
   // Partner Participant State from Signaling
   const [partnerParticipant, setPartnerParticipant] = useState<WebRtcParticipant | null>(null);
 
+  // ICE & NAT Traversal Configuration
+  const [iceReport, setIceReport] = useState<IceConfigurationReport>(() => getIceConfiguration());
+
+  // Fetch short-lived ICE credentials on mount or auth readiness
+  useEffect(() => {
+    let isMounted = true;
+    fetchServerIceConfiguration()
+      .then((fresh) => {
+        if (isMounted && fresh) {
+          setIceReport(fresh);
+        }
+      })
+      .catch(() => {
+        // ignore fallback errors
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Refs for persistent lifecycle cleanup
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const queuedCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const cleanupListenersRef = useRef<(() => void)[]>([]);
   const isInitiatorRef = useRef<boolean>(myUserId < partnerId);
+  const isStartingCallRef = useRef<boolean>(false);
+  const partnerHadJoinedRef = useRef<boolean>(false);
 
-  // Stop all media tracks strictly
+  // 1. Stop all media tracks strictly (never retain camera or mic in background)
   const stopAllMediaTracks = useCallback(() => {
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
         try {
+          track.enabled = false;
           track.stop();
         } catch {
           // ignore
@@ -71,7 +102,7 @@ export function useWebRtcVideoCall({
     setLocalStream(null);
   }, []);
 
-  // Close PeerConnection strictly
+  // 2. Close PeerConnection strictly
   const closePeerConnection = useCallback(() => {
     if (pcRef.current) {
       try {
@@ -79,6 +110,7 @@ export function useWebRtcVideoCall({
         pcRef.current.onicecandidate = null;
         pcRef.current.onconnectionstatechange = null;
         pcRef.current.oniceconnectionstatechange = null;
+        pcRef.current.onsignalingstatechange = null;
         pcRef.current.close();
       } catch {
         // ignore
@@ -88,7 +120,7 @@ export function useWebRtcVideoCall({
     setRemoteStream(null);
   }, []);
 
-  // Clean up all signaling listeners strictly
+  // 3. Clean up all signaling listeners strictly
   const cleanUpSignalingListeners = useCallback(() => {
     cleanupListenersRef.current.forEach((unsub) => {
       try {
@@ -100,7 +132,7 @@ export function useWebRtcVideoCall({
     cleanupListenersRef.current = [];
   }, []);
 
-  // Leave Call action
+  // 4. Leave Call action
   const leaveCall = useCallback(async () => {
     stopAllMediaTracks();
     closePeerConnection();
@@ -116,16 +148,53 @@ export function useWebRtcVideoCall({
     setStatus("idle");
     setErrorMessage(null);
     setIsUsingDemoStream(false);
+    setPartnerParticipant(null);
+    partnerHadJoinedRef.current = false;
   }, [roomId, myUserId, stopAllMediaTracks, closePeerConnection, cleanUpSignalingListeners]);
 
-  // Clean up on component unmount
+  // 5. Clean up on component unmount
   useEffect(() => {
     return () => {
       stopAllMediaTracks();
       closePeerConnection();
       cleanUpSignalingListeners();
+      webrtcSignalingService.clearRoomSignaling(roomId, myUserId).catch(() => {});
     };
-  }, [stopAllMediaTracks, closePeerConnection, cleanUpSignalingListeners]);
+  }, [roomId, myUserId, stopAllMediaTracks, closePeerConnection, cleanUpSignalingListeners]);
+
+  // 6. Automatically close video call on game end
+  useEffect(() => {
+    const isFinished =
+      isGameEnd ||
+      gameStatus === "game_end" ||
+      gameStatus === "results" ||
+      gameStatus === "finished";
+
+    if (isFinished && isInCall) {
+      leaveCall();
+    }
+  }, [isGameEnd, gameStatus, isInCall, leaveCall]);
+
+  // 7. Automatically close peer connection on authentication loss
+  useEffect(() => {
+    if (typeof window === "undefined" || !auth) return;
+
+    try {
+      const unsubAuth = onAuthStateChanged(auth, (user) => {
+        if (!user && isInCall) {
+          stopAllMediaTracks();
+          closePeerConnection();
+          cleanUpSignalingListeners();
+          setIsInCall(false);
+          setStatus("unauthorized");
+          setErrorMessage("User authentication session was lost. Video connection closed.");
+        }
+      });
+      return () => unsubAuth();
+    } catch {
+      // ignore auth listener errors in test environments
+    }
+  }, [isInCall, stopAllMediaTracks, closePeerConnection, cleanUpSignalingListeners]);
 
   // Track & Toggle Camera
   const toggleCamera = useCallback(() => {
@@ -162,305 +231,376 @@ export function useWebRtcVideoCall({
   // Start Call Implementation
   const startCall = useCallback(
     async (forceDemoStream = false) => {
-      // Clean previous session if any
-      stopAllMediaTracks();
-      closePeerConnection();
-      cleanUpSignalingListeners();
+      // Prevent concurrent duplicate initialization
+      if (isStartingCallRef.current) {
+        return;
+      }
+      isStartingCallRef.current = true;
 
-      setErrorMessage(null);
-      setStatus("requesting_permissions");
+      try {
+        // Clean previous session if any
+        stopAllMediaTracks();
+        closePeerConnection();
+        cleanUpSignalingListeners();
 
-      let stream: MediaStream | null = null;
-      let usedDemo = forceDemoStream;
+        setErrorMessage(null);
+        setStatus("requesting_permissions");
 
-      // 1. Request Media Permission
-      if (!forceDemoStream && typeof navigator !== "undefined" && navigator.mediaDevices) {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
-          });
+        let stream: MediaStream | null = null;
+        let usedDemo = forceDemoStream;
+
+        // 1. Request Media Permission
+        if (!forceDemoStream && typeof navigator !== "undefined" && navigator.mediaDevices) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: true,
+            });
+            setHasCamera(true);
+            setHasMicrophone(true);
+          } catch (err: unknown) {
+            const error = err as Error;
+            const errorName = error.name || "";
+
+            if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
+              stopAllMediaTracks();
+              setStatus("permission_denied");
+              setErrorMessage(
+                "Camera/microphone permission was denied. Please allow camera and microphone in your browser to start video."
+              );
+              setIsInCall(false);
+              return;
+            }
+
+            if (errorName === "NotFoundError" || errorName === "DevicesNotFoundError") {
+              try {
+                const audioOnlyStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream = audioOnlyStream;
+                setHasCamera(false);
+                setHasMicrophone(true);
+                setStatus("no_camera");
+              } catch {
+                try {
+                  const videoOnlyStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                  stream = videoOnlyStream;
+                  setHasCamera(true);
+                  setHasMicrophone(false);
+                  setStatus("no_microphone");
+                } catch {
+                  setHasCamera(false);
+                  setHasMicrophone(false);
+                  setStatus("no_camera");
+                  setErrorMessage("No physical camera or microphone detected on this device.");
+                  setIsInCall(false);
+                  return;
+                }
+              }
+            } else {
+              console.warn("[WebRTC] getUserMedia failed, offering companion feed fallback:", err);
+              usedDemo = true;
+            }
+          }
+        } else {
+          usedDemo = true;
+        }
+
+        // If physical stream couldn't be created or fallback requested, generate synthetic feed
+        if (!stream && usedDemo) {
+          stream = createAntiquarianDemoStream(
+            myDisplayName,
+            myCity,
+            myUserId === "user_alex" ? "amber" : "emerald"
+          );
+          setIsUsingDemoStream(true);
           setHasCamera(true);
           setHasMicrophone(true);
-        } catch (err: unknown) {
-          const error = err as Error;
-          const errorName = error.name || "";
+        }
 
-          if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
-            setStatus("permission_denied");
-            setErrorMessage(
-              "Camera/microphone permission was denied. Please allow camera and microphone in your browser to start video."
-            );
+        if (!stream) {
+          setStatus("failed");
+          setErrorMessage("Unable to initialize media stream.");
+          setIsInCall(false);
+          return;
+        }
+
+        localStreamRef.current = stream;
+        setLocalStream(stream);
+        setIsCameraOn(true);
+        setIsMicOn(true);
+        setIsInCall(true);
+        setStatus("connecting");
+
+        // 2. Publish Participant Presence with Security Verification
+        try {
+          await webrtcSignalingService.publishParticipant(roomId, {
+            userId: myUserId,
+            joined: true,
+            cameraEnabled: true,
+            micEnabled: true,
+            hasCamera: true,
+            hasMic: true,
+            joinedAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+        } catch (err) {
+          if (err instanceof SignalingSecurityError) {
+            stopAllMediaTracks();
+            closePeerConnection();
+            cleanUpSignalingListeners();
+            setStatus("unauthorized");
+            setErrorMessage(err.message);
+            setIsInCall(false);
             return;
           }
-
-          if (errorName === "NotFoundError" || errorName === "DevicesNotFoundError") {
-            // Check if one device exists (camera or mic)
-            try {
-              const audioOnlyStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-              stream = audioOnlyStream;
-              setHasCamera(false);
-              setHasMicrophone(true);
-              setStatus("no_camera");
-            } catch {
-              try {
-                const videoOnlyStream = await navigator.mediaDevices.getUserMedia({ video: true });
-                stream = videoOnlyStream;
-                setHasCamera(true);
-                setHasMicrophone(false);
-                setStatus("no_microphone");
-              } catch {
-                setHasCamera(false);
-                setHasMicrophone(false);
-                setStatus("no_camera");
-                setErrorMessage("No physical camera or microphone detected on this device.");
-                return;
-              }
-            }
-          } else {
-            // MediaDevices might be restricted by browser sandbox/iframe
-            console.warn("[WebRTC] getUserMedia failed, offering demo companion feed fallback:", err);
-            usedDemo = true;
-          }
+          console.warn("[WebRTC] Failed to publish participant:", err);
         }
-      } else {
-        usedDemo = true;
-      }
 
-      // If physical stream couldn't be created or fallback requested, generate synthetic feed
-      if (!stream && usedDemo) {
-        stream = createAntiquarianDemoStream(
-          myDisplayName,
-          myCity,
-          myUserId === "user_alex" ? "amber" : "emerald"
-        );
-        setIsUsingDemoStream(true);
-        setHasCamera(true);
-        setHasMicrophone(true);
-      }
+        // 3. Create PeerConnection with active ICE servers (Cloudflare temporary TURN relay or STUN fallback)
+        if (typeof window === "undefined" || typeof RTCPeerConnection === "undefined") {
+          setStatus("connected");
+          return;
+        }
 
-      if (!stream) {
-        setStatus("failed");
-        setErrorMessage("Unable to initialize media stream.");
-        return;
-      }
-
-      localStreamRef.current = stream;
-      setLocalStream(stream);
-      setIsCameraOn(true);
-      setIsMicOn(true);
-      setIsInCall(true);
-      setStatus("connecting");
-
-      // 2. Publish Participant Presence in RTDB
-      try {
-        await webrtcSignalingService.publishParticipant(roomId, {
-          userId: myUserId,
-          joined: true,
-          cameraEnabled: true,
-          micEnabled: true,
-          hasCamera: true,
-          hasMic: true,
-          joinedAt: Date.now(),
-          updatedAt: Date.now(),
-        });
-      } catch (err) {
-        console.warn("[WebRTC] Failed to publish participant:", err);
-      }
-
-      // 3. Create PeerConnection
-      if (typeof window === "undefined" || typeof RTCPeerConnection === "undefined") {
-        // In SSR / non-browser environment
-        setStatus("connected");
-        return;
-      }
-
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-      pcRef.current = pc;
-      queuedCandidatesRef.current = [];
-
-      // Add local tracks to PeerConnection
-      stream.getTracks().forEach((track) => {
+        let activeIceServers = iceReport.iceServers;
         try {
-          pc.addTrack(track, stream!);
-        } catch (e) {
-          console.warn("[WebRTC] addTrack warning:", e);
-        }
-      });
-
-      // Handle remote media track
-      pc.ontrack = (event) => {
-        if (event.streams && event.streams[0]) {
-          setRemoteStream(event.streams[0]);
-        }
-      };
-
-      // Handle ICE Candidate generation
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          webrtcSignalingService.sendIceCandidate(roomId, {
-            fromUserId: myUserId,
-            toUserId: partnerId,
-            candidate: {
-              candidate: event.candidate.candidate,
-              sdpMid: event.candidate.sdpMid,
-              sdpMLineIndex: event.candidate.sdpMLineIndex,
-              usernameFragment: event.candidate.usernameFragment,
-            },
-            timestamp: Date.now(),
-          }).catch(() => {});
-        }
-      };
-
-      // Connection state monitors
-      pc.onconnectionstatechange = () => {
-        const state = pc.connectionState;
-        if (state === "connected") {
-          setStatus("connected");
-        } else if (state === "connecting") {
-          setStatus("connecting");
-        } else if (state === "disconnected") {
-          setStatus("reconnecting");
-        } else if (state === "failed") {
-          setStatus("failed");
-          setErrorMessage("PeerConnection failed. Network or firewall blocked P2P connection.");
-        } else if (state === "closed") {
-          setStatus("idle");
-        }
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        const state = pc.iceConnectionState;
-        if (state === "connected" || state === "completed") {
-          setStatus("connected");
-        } else if (state === "disconnected") {
-          setStatus("reconnecting");
-        } else if (state === "failed") {
-          setStatus("failed");
-        }
-      };
-
-      // 4. Signaling Listeners
-      // A. Participant listener
-      const unsubParticipants = webrtcSignalingService.subscribeToParticipants(
-        roomId,
-        async (participants) => {
-          const partner = participants[partnerId];
-          setPartnerParticipant(partner || null);
-
-          // If partner is present and we are initiator, create offer if not created
-          if (partner && partner.joined && isInitiatorRef.current) {
-            if (pc.signalingState === "stable") {
-              try {
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                await webrtcSignalingService.sendOffer(roomId, {
-                  fromUserId: myUserId,
-                  toUserId: partnerId,
-                  sdp: { type: offer.type, sdp: offer.sdp || "" },
-                  timestamp: Date.now(),
-                });
-              } catch (err) {
-                console.warn("[WebRTC] createOffer error:", err);
-              }
-            }
+          const latestReport = await fetchServerIceConfiguration();
+          if (latestReport?.iceServers && latestReport.iceServers.length > 0) {
+            activeIceServers = latestReport.iceServers;
+            setIceReport(latestReport);
           }
+        } catch {
+          // fallback to current iceReport.iceServers
         }
-      );
 
-      // B. Offer listener (when partner sends offer to us)
-      const unsubOffers = webrtcSignalingService.subscribeToOffers(
-        roomId,
-        myUserId,
-        async (offer) => {
-          if (!offer || offer.fromUserId !== partnerId) return;
+        const pc = new RTCPeerConnection({ iceServers: activeIceServers });
+        pcRef.current = pc;
+        queuedCandidatesRef.current = [];
+
+        // Add local tracks to PeerConnection
+        stream.getTracks().forEach((track) => {
           try {
-            if (pc.signalingState !== "stable") {
-              if (myUserId < partnerId) {
-                // Ignore glare if we have priority
-                return;
-              }
-              await pc.setRemoteDescription(new RTCSessionDescription(offer.sdp as RTCSessionDescriptionInit));
-            } else {
-              await pc.setRemoteDescription(new RTCSessionDescription(offer.sdp as RTCSessionDescriptionInit));
-            }
+            pc.addTrack(track, stream!);
+          } catch (e) {
+            console.warn("[WebRTC] addTrack warning:", e);
+          }
+        });
 
-            // Apply queued candidates
-            while (queuedCandidatesRef.current.length > 0) {
-              const cand = queuedCandidatesRef.current.shift();
-              if (cand) await pc.addIceCandidate(new RTCIceCandidate(cand));
-            }
+        // Handle remote media track
+        pc.ontrack = (event) => {
+          if (event.streams && event.streams[0]) {
+            setRemoteStream(event.streams[0]);
+          }
+        };
 
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            await webrtcSignalingService.sendAnswer(roomId, {
+        // Handle ICE Candidate generation
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            webrtcSignalingService.sendIceCandidate(roomId, {
               fromUserId: myUserId,
               toUserId: partnerId,
-              sdp: { type: answer.type, sdp: answer.sdp || "" },
+              candidate: {
+                candidate: event.candidate.candidate,
+                sdpMid: event.candidate.sdpMid,
+                sdpMLineIndex: event.candidate.sdpMLineIndex,
+                usernameFragment: event.candidate.usernameFragment,
+              },
               timestamp: Date.now(),
+            }).catch((err) => {
+              if (err instanceof SignalingSecurityError) {
+                setStatus("unauthorized");
+                setErrorMessage(err.message);
+              }
             });
-          } catch (err) {
-            console.warn("[WebRTC] Error handling offer:", err);
           }
-        }
-      );
+        };
 
-      // C. Answer listener (when partner answers our offer)
-      const unsubAnswers = webrtcSignalingService.subscribeToAnswers(
-        roomId,
-        myUserId,
-        async (answer) => {
-          if (!answer || answer.fromUserId !== partnerId) return;
-          try {
-            if (pc.signalingState === "have-local-offer") {
-              await pc.setRemoteDescription(new RTCSessionDescription(answer.sdp as RTCSessionDescriptionInit));
+        // Connection state monitors
+        pc.onconnectionstatechange = () => {
+          const state = pc.connectionState;
+          if (state === "connected") {
+            setStatus("connected");
+          } else if (state === "connecting") {
+            setStatus("connecting");
+          } else if (state === "disconnected") {
+            setStatus("reconnecting");
+          } else if (state === "failed") {
+            setStatus("failed");
+            setErrorMessage("PeerConnection failed. NAT or firewall blocked direct P2P connection.");
+          } else if (state === "closed") {
+            setStatus("idle");
+          }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          const state = pc.iceConnectionState;
+          if (state === "connected" || state === "completed") {
+            setStatus("connected");
+          } else if (state === "disconnected") {
+            setStatus("reconnecting");
+          } else if (state === "failed") {
+            setStatus("failed");
+          }
+        };
+
+        // 4. Signaling Listeners
+        // A. Participant listener
+        const unsubParticipants = webrtcSignalingService.subscribeToParticipants(
+          roomId,
+          async (participants) => {
+            const partner = participants[partnerId];
+            setPartnerParticipant(partner || null);
+
+            // Handle Partner Disconnect / Leave
+            if (partner && partner.joined) {
+              partnerHadJoinedRef.current = true;
+            } else if (partnerHadJoinedRef.current && (!partner || !partner.joined)) {
+              // Partner disconnected or left
+              closePeerConnection();
+              setStatus("partner_disconnected");
+              setErrorMessage("Your partner has left the video call.");
+              return;
+            }
+
+            // If partner is present and we are initiator, create offer if not created
+            if (partner && partner.joined && isInitiatorRef.current) {
+              if (pc.signalingState === "stable") {
+                try {
+                  const offer = await pc.createOffer();
+                  await pc.setLocalDescription(offer);
+                  await webrtcSignalingService.sendOffer(roomId, {
+                    fromUserId: myUserId,
+                    toUserId: partnerId,
+                    sdp: { type: offer.type, sdp: offer.sdp || "" },
+                    timestamp: Date.now(),
+                  });
+                } catch (err) {
+                  if (err instanceof SignalingSecurityError) {
+                    setStatus("unauthorized");
+                    setErrorMessage(err.message);
+                  } else {
+                    console.warn("[WebRTC] createOffer error:", err);
+                  }
+                }
+              }
+            }
+          },
+          myUserId
+        );
+
+        // B. Offer listener (when partner sends offer to us)
+        const unsubOffers = webrtcSignalingService.subscribeToOffers(
+          roomId,
+          myUserId,
+          async (offer) => {
+            if (!offer || offer.fromUserId !== partnerId) return;
+            try {
+              if (pc.signalingState !== "stable") {
+                if (myUserId < partnerId) {
+                  return;
+                }
+                await pc.setRemoteDescription(new RTCSessionDescription(offer.sdp as RTCSessionDescriptionInit));
+              } else {
+                await pc.setRemoteDescription(new RTCSessionDescription(offer.sdp as RTCSessionDescriptionInit));
+              }
 
               // Apply queued candidates
               while (queuedCandidatesRef.current.length > 0) {
                 const cand = queuedCandidatesRef.current.shift();
                 if (cand) await pc.addIceCandidate(new RTCIceCandidate(cand));
               }
-            }
-          } catch (err) {
-            console.warn("[WebRTC] Error handling answer:", err);
-          }
-        }
-      );
 
-      // D. ICE candidate listener
-      const unsubCandidates = webrtcSignalingService.subscribeToIceCandidates(
-        roomId,
-        myUserId,
-        async (candidateMsg) => {
-          if (!candidateMsg || candidateMsg.fromUserId !== partnerId) return;
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              await webrtcSignalingService.sendAnswer(roomId, {
+                fromUserId: myUserId,
+                toUserId: partnerId,
+                sdp: { type: answer.type, sdp: answer.sdp || "" },
+                timestamp: Date.now(),
+              });
+            } catch (err) {
+              if (err instanceof SignalingSecurityError) {
+                setStatus("unauthorized");
+                setErrorMessage(err.message);
+              } else {
+                console.warn("[WebRTC] Error handling offer:", err);
+              }
+            }
+          }
+        );
+
+        // C. Answer listener (when partner answers our offer)
+        const unsubAnswers = webrtcSignalingService.subscribeToAnswers(
+          roomId,
+          myUserId,
+          async (answer) => {
+            if (!answer || answer.fromUserId !== partnerId) return;
+            try {
+              if (pc.signalingState === "have-local-offer") {
+                await pc.setRemoteDescription(new RTCSessionDescription(answer.sdp as RTCSessionDescriptionInit));
+
+                while (queuedCandidatesRef.current.length > 0) {
+                  const cand = queuedCandidatesRef.current.shift();
+                  if (cand) await pc.addIceCandidate(new RTCIceCandidate(cand));
+                }
+              }
+            } catch (err) {
+              if (err instanceof SignalingSecurityError) {
+                setStatus("unauthorized");
+                setErrorMessage(err.message);
+              } else {
+                console.warn("[WebRTC] Error handling answer:", err);
+              }
+            }
+          }
+        );
+
+        // D. ICE candidate listener
+        const unsubCandidates = webrtcSignalingService.subscribeToIceCandidates(
+          roomId,
+          myUserId,
+          async (candidateMsg) => {
+            if (!candidateMsg || candidateMsg.fromUserId !== partnerId) return;
+            try {
+              if (pc.remoteDescription && pc.remoteDescription.type) {
+                await pc.addIceCandidate(new RTCIceCandidate(candidateMsg.candidate));
+              } else {
+                queuedCandidatesRef.current.push(candidateMsg.candidate);
+              }
+            } catch (err) {
+              if (err instanceof SignalingSecurityError) {
+                setStatus("unauthorized");
+                setErrorMessage(err.message);
+              } else {
+                console.warn("[WebRTC] Error adding ICE candidate:", err);
+              }
+            }
+          }
+        );
+
+        cleanupListenersRef.current = [unsubParticipants, unsubOffers, unsubAnswers, unsubCandidates];
+
+        // If we are initiator and partner is already present in RTDB, kick off offer
+        if (isInitiatorRef.current) {
           try {
-            if (pc.remoteDescription && pc.remoteDescription.type) {
-              await pc.addIceCandidate(new RTCIceCandidate(candidateMsg.candidate));
-            } else {
-              queuedCandidatesRef.current.push(candidateMsg.candidate);
-            }
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            await webrtcSignalingService.sendOffer(roomId, {
+              fromUserId: myUserId,
+              toUserId: partnerId,
+              sdp: { type: offer.type, sdp: offer.sdp || "" },
+              timestamp: Date.now(),
+            });
           } catch (err) {
-            console.warn("[WebRTC] Error adding ICE candidate:", err);
+            if (err instanceof SignalingSecurityError) {
+              setStatus("unauthorized");
+              setErrorMessage(err.message);
+            } else {
+              console.warn("[WebRTC] Initial offer error:", err);
+            }
           }
         }
-      );
-
-      cleanupListenersRef.current = [unsubParticipants, unsubOffers, unsubAnswers, unsubCandidates];
-
-      // If we are initiator and partner is already present in RTDB, kick off offer
-      if (isInitiatorRef.current) {
-        try {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          await webrtcSignalingService.sendOffer(roomId, {
-            fromUserId: myUserId,
-            toUserId: partnerId,
-            sdp: { type: offer.type, sdp: offer.sdp || "" },
-            timestamp: Date.now(),
-          });
-        } catch (err) {
-          console.warn("[WebRTC] Initial offer error:", err);
-        }
+      } finally {
+        isStartingCallRef.current = false;
       }
     },
     [
@@ -469,6 +609,7 @@ export function useWebRtcVideoCall({
       partnerId,
       myDisplayName,
       myCity,
+      iceReport.iceServers,
       stopAllMediaTracks,
       closePeerConnection,
       cleanUpSignalingListeners,
@@ -496,6 +637,7 @@ export function useWebRtcVideoCall({
     partnerParticipant,
     isPartnerCameraOn: partnerParticipant ? partnerParticipant.cameraEnabled : true,
     isPartnerMicOn: partnerParticipant ? partnerParticipant.micEnabled : true,
+    iceReport,
     startCall,
     leaveCall,
     toggleCamera,

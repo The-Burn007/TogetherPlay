@@ -231,6 +231,7 @@ export function getCuratedGameNight(
   return {
     ...base,
     id: `lineup_${Date.now()}`,
+    title: base.theme,
     createdAt: new Date().toISOString(),
     partnerNames: { p1: p1Name, p2: p2Name },
     partnerCities: { p1: p1City, p2: p2City },

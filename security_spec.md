@@ -23,7 +23,7 @@ TogetherPlay is a real-time multiplayer application designed for long-distance c
 - The authoritative server enforces:
   - **Scores**: Client cannot submit scores. Scores are computed exclusively on the server based on round rules, time deltas, and authoritative target matching.
   - **Winners**: Client cannot forge winners. Winner determination occurs on the server when winning conditions or round limits are satisfied.
-  - **Dice & Randomness**: Client dice rolls are discarded. The server computes cryptographic random rolls (`serverRollDice()`).
+  - **Dice & Randomness**: Client dice rolls, target selections, and random parameters are discarded and strictly forbidden. The server computes all authoritative randomness using server-side cryptographically secure integer generators (rejection-sampled CSPRNG without modulo bias) and Fisher-Yates shuffling (`AuthoritativeGameEngine.serverRollDice()`, `generateAuthoritativeRound()`, and `secureFisherYatesShuffle()`). Deterministic test injection is restricted strictly to server-side test infrastructure via `setTestRandomSource()` and is forbidden in production or via client action payloads.
   - **Timers**: Deadlines and countdowns are calibrated to `serverTimestamp`. Client device clocks are ignored.
   - **Idempotency**: Duplicate actions (`clientActionId`) are recorded and prevented from duplicate execution.
 

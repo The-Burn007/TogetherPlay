@@ -3,6 +3,7 @@ import type {
   AIChallengeCategory,
   AIChallengeDifficulty,
 } from "@/types/domain";
+import { secureRandomChoice, secureRandomInt } from "@/lib/utils/crypto";
 
 export const CURATED_CHALLENGES: AIChallenge[] = [
   // 1. Relationship Questions
@@ -189,10 +190,11 @@ export function getCuratedChallenge(
     if (matchedDiff.length > 0) filtered = matchedDiff;
   }
 
-  const selected = filtered[Math.floor(Math.random() * filtered.length)];
+  const selected = secureRandomChoice(filtered);
+  const randomSuffix = secureRandomInt(100000, 999999).toString(36);
   return {
     ...selected,
-    id: `curated_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    id: `curated_${Date.now()}_${randomSuffix}`,
     generatedAt: Date.now(),
   };
 }

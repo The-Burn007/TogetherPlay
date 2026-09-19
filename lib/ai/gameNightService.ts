@@ -6,24 +6,54 @@ import {
 } from "./gameNightTypes";
 import { getCuratedGameNight } from "./curatedGameNights";
 import { sanitizeUntrustedInput } from "./geminiChallengeService";
+import {
+  type RateLimitPromise,
+  type RateLimitResult,
+} from "./geminiChallengeService";
 
 // ---------------------------------------------------------------------------
 // Rate Limiting for Game Night Generation (4 per minute max per couple)
+// Dual-mode: Local memory fallback + hookable shared authority for server routes
 // ---------------------------------------------------------------------------
 interface RateLimitRecord {
   timestamps: number[];
 }
 
+type RateLimitChecker = (key: string, ip?: string) => RateLimitPromise;
+
 const gameNightRateLimitMap = new Map<string, RateLimitRecord>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 4;
+const MAX_RATE_LIMIT_KEYS = 1000;
 
-export function checkGameNightRateLimit(key: string): {
-  allowed: boolean;
-  remaining: number;
-  resetInSeconds: number;
-} {
+let customGameNightRateLimiter: RateLimitChecker | null = null;
+
+export function setGameNightRateLimiterHook(hook: RateLimitChecker | null): void {
+  customGameNightRateLimiter = hook;
+}
+
+export function clearGameNightRateLimitForTesting(): void {
+  gameNightRateLimitMap.clear();
+}
+
+/**
+ * Checks game night generation rate limit.
+ * Supports dual-mode: synchronous property access or awaitable promise.
+ */
+export function checkGameNightRateLimit(key: string, ip?: string): RateLimitPromise {
+  if (customGameNightRateLimiter) {
+    return customGameNightRateLimiter(key, ip);
+  }
+
   const now = Date.now();
+
+  if (gameNightRateLimitMap.size > MAX_RATE_LIMIT_KEYS) {
+    for (const [k, v] of gameNightRateLimitMap.entries()) {
+      v.timestamps = v.timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+      if (v.timestamps.length === 0) gameNightRateLimitMap.delete(k);
+    }
+  }
+
   let record = gameNightRateLimitMap.get(key);
 
   if (!record) {
@@ -42,19 +72,26 @@ export function checkGameNightRateLimit(key: string): {
       1,
       Math.ceil((oldest + RATE_LIMIT_WINDOW_MS - now) / 1000)
     );
-    return {
+    const result: RateLimitResult = {
       allowed: false,
       remaining: 0,
       resetInSeconds,
+      source: "local_fallback",
+      key,
     };
+    return Object.assign(Promise.resolve(result), result);
   }
 
   record.timestamps.push(now);
-  return {
+  const remaining = MAX_REQUESTS_PER_WINDOW - record.timestamps.length;
+  const result: RateLimitResult = {
     allowed: true,
-    remaining: MAX_REQUESTS_PER_WINDOW - record.timestamps.length,
+    remaining,
     resetInSeconds: 60,
+    source: "local_fallback",
+    key,
   };
+  return Object.assign(Promise.resolve(result), result);
 }
 
 // ---------------------------------------------------------------------------
@@ -235,17 +272,29 @@ Round 2 and Round 5 MUST include 4 distinct playful options for the couple to ch
     ])) as { text?: string };
 
     const rawText = response.text;
-    if (!rawText) {
+    if (!rawText || rawText.trim().length === 0) {
       throw new Error("EMPTY_GEMINI_RESPONSE");
     }
 
-    const parsedJson = JSON.parse(rawText);
-    const validated = GameNightLineupSchema.parse(parsedJson);
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(rawText);
+    } catch {
+      throw new Error("MALFORMED_AI_OUTPUT");
+    }
+
+    const validation = GameNightLineupSchema.safeParse(parsedJson);
+    if (!validation.success) {
+      console.warn("Gemini Game Night output schema validation failed:", validation.error.format());
+      throw new Error("SCHEMA_VIOLATION");
+    }
+    const validated = validation.data;
 
     // Format final lineup with IDs, status, and partner metadata
     const lineup: GameNightLineup = {
       id: `gn_${Date.now()}`,
       theme: validated.theme,
+      title: validated.theme,
       themeDescription: validated.themeDescription,
       hostWelcome: validated.hostWelcome,
       totalRounds: 5,
@@ -254,9 +303,14 @@ Round 2 and Round 5 MUST include 4 distinct playful options for the couple to ch
       partnerNames: { p1: p1Name, p2: p2Name },
       partnerCities: { p1: p1City, p2: p2City },
       activities: validated.activities.map((act, idx) => ({
-        ...act,
         id: `act_${idx + 1}`,
         roundNumber: idx + 1,
+        type: act.type,
+        title: act.title,
+        subtitle: act.subtitle,
+        hostIntro: act.hostIntro,
+        estimatedMinutes: act.estimatedMinutes,
+        promptData: act.promptData,
         status: idx === 0 ? "current" : "upcoming",
       })),
     };
@@ -268,10 +322,19 @@ Round 2 and Round 5 MUST include 4 distinct playful options for the couple to ch
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.warn("AI Game Night generation fallback triggered:", errorMsg);
+
+    let fallbackReason = "unexpected_error";
+    if (errorMsg.includes("GEMINI_TIMEOUT")) fallbackReason = "timeout";
+    else if (errorMsg.includes("EMPTY_GEMINI_RESPONSE")) fallbackReason = "empty_response";
+    else if (errorMsg.includes("MALFORMED_AI_OUTPUT")) fallbackReason = "malformed_output";
+    else if (errorMsg.includes("SCHEMA_VIOLATION")) fallbackReason = "schema_violation";
+    else if (errorMsg.includes("gemini_api_key_not_configured")) fallbackReason = "gemini_api_key_not_configured";
+    else fallbackReason = `provider_failure: ${errorMsg}`;
+
     return {
       lineup: fallbackLineup,
       isFallback: true,
-      fallbackReason: errorMsg,
+      fallbackReason,
     };
   }
 }

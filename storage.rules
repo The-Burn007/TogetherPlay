@@ -29,19 +29,23 @@ service firebase.storage {
       allow read: if signedIn() && (request.auth.uid == uid || isPartnerOf(uid));
 
       // Limit file size to 5MB and strictly enforce safe image MIME types (SVG blocked to prevent stored XSS)
-      allow write: if signedIn()
+      allow create, update: if signedIn()
         && request.auth.uid == uid
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png|webp)');
+
+      allow delete: if signedIn() && request.auth.uid == uid;
     }
 
     match /couples/{coupleId}/memories/{fileName} {
       allow read: if isCoupleMember(coupleId);
 
       // Require authentication and couple membership; enforce 15MB limit and safe MIME types
-      allow write: if isCoupleMember(coupleId)
+      allow create, update: if isCoupleMember(coupleId)
         && request.resource.size < 15 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png|webp)');
+
+      allow delete: if isCoupleMember(coupleId);
     }
 
     match /{allPaths=**} {

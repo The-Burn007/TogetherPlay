@@ -7,7 +7,7 @@
 5. Do not expose Gemini secrets in client-side code.
 6. Do not store video or audio in MVP.
 7. Do not trust client timestamps for game outcomes.
-8. Use server-side randomness for dice and cards.
+8. Use server-side cryptographically secure randomness (CSPRNG, secure random integer generation, and Fisher-Yates shuffling) for dice, targets, powers, tension delays, and board generation. Never accept client-provided randomness, and inject deterministic values exclusively through server test infrastructure.
 9. Use clientActionId for idempotency.
 10. Keep App Check debug tokens out of production.
 11. Run Security Rules tests in CI.

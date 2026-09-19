@@ -70,9 +70,9 @@ function LoginForm() {
     [signInAsTestUser, showToast, router, redirectUrl]
   );
 
-  // Auto-bypass if requested via ?bypass=true query param
+  // Auto-bypass if requested via ?bypass=true query param (development/test only; impossible in production)
   useEffect(() => {
-    if (autoBypass && !isAuthenticated) {
+    if (process.env.NODE_ENV !== "production" && autoBypass && !isAuthenticated) {
       handleBypassTestUser("alex");
     }
   }, [autoBypass, isAuthenticated, handleBypassTestUser]);

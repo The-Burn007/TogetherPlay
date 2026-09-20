@@ -16,6 +16,41 @@ import {
 import { NextRequest } from "next/server";
 import * as serverAuthModule from "@/lib/firebase/server/auth";
 
+vi.mock("@/lib/firebase/server/admin", () => {
+  const mockVerifyToken = vi.fn(async (token: string) => {
+    if (token === "valid_attested_appcheck_token") {
+      const proj =
+        process.env.FIREBASE_PROJECT_ID ||
+        process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+        "rational-drake-mlcf1";
+      return {
+        appId: "togetherplay-web-app",
+        token: {
+          aud: [`projects/${proj}`, proj],
+          sub: "togetherplay-web-app",
+          app_id: "togetherplay-web-app",
+        },
+      };
+    }
+    const err = new Error("Invalid token");
+    (err as any).code = "app-check/invalid-argument";
+    throw err;
+  });
+
+  return {
+    getAdminAppCheck: vi.fn(() => ({
+      verifyToken: mockVerifyToken,
+    })),
+    getAdminAuth: vi.fn(() => ({
+      verifyIdToken: vi.fn(),
+    })),
+    getAdminFirestore: vi.fn(() => ({})),
+    getAdminDatabase: vi.fn(() => ({})),
+    getAdminStorage: vi.fn(() => ({})),
+    getAdminApp: vi.fn(() => ({})),
+  };
+});
+
 describe("Cloudflare WebRTC Temporary TURN Credential Flow", () => {
   const originalEnv = { ...process.env };
 
@@ -26,6 +61,7 @@ describe("Cloudflare WebRTC Temporary TURN Credential Flow", () => {
   beforeEach(() => {
     clearIceConfigCache();
     vi.restoreAllMocks();
+    delete process.env.ENFORCE_APP_CHECK;
     delete process.env.CLOUDFLARE_ACCOUNT_ID;
     delete process.env.CLOUDFLARE_TURN_KEY_ID;
     delete process.env.CLOUDFLARE_TURN_API_TOKEN;
@@ -286,6 +322,124 @@ describe("Cloudflare WebRTC Temporary TURN Credential Flow", () => {
       const jsonStr = JSON.stringify(data);
       expect(jsonStr).not.toContain(MOCK_API_TOKEN);
       expect(jsonStr).not.toContain(MOCK_KEY_ID);
+    });
+
+    it("rejects request when App Check is enforced and token is missing", async () => {
+      process.env.ENFORCE_APP_CHECK = "true";
+
+      const req = new NextRequest("http://localhost:3000/api/webrtc/ice-servers", {
+        headers: { Authorization: "Bearer valid_mock_token" },
+      });
+
+      const response = await getIceServersRoute(req);
+      expect(response.status).toBe(401);
+
+      const data = await response.json();
+      expect(data.success).toBe(false);
+      expect(data.error?.category).toBe("APP_CHECK_ATTESTATION");
+      expect(data.error?.code).toBe("MISSING_APP_CHECK");
+    });
+
+    it("rejects request when App Check is enforced and token is invalid", async () => {
+      process.env.ENFORCE_APP_CHECK = "true";
+
+      const req = new NextRequest("http://localhost:3000/api/webrtc/ice-servers", {
+        headers: {
+          Authorization: "Bearer valid_mock_token",
+          "x-firebase-appcheck": "invalid_signature_appcheck_token",
+        },
+      });
+
+      const response = await getIceServersRoute(req);
+      expect(response.status).toBe(401);
+
+      const data = await response.json();
+      expect(data.success).toBe(false);
+      expect(data.error?.category).toBe("APP_CHECK_ATTESTATION");
+      expect(["MALFORMED_APP_CHECK", "INVALID_APP_CHECK_SIGNATURE", "APP_CHECK_FAILED"]).toContain(
+        data.error?.code
+      );
+    });
+
+    it("allows request with valid App Check token and valid auth to reach TURN credential generation", async () => {
+      process.env.ENFORCE_APP_CHECK = "true";
+      process.env.CLOUDFLARE_TURN_KEY_ID = MOCK_KEY_ID;
+      process.env.CLOUDFLARE_TURN_API_TOKEN = MOCK_API_TOKEN;
+
+      vi.spyOn(serverAuthModule, "requireServerAuth").mockResolvedValueOnce({
+        user: {
+          uid: "player_appcheck_uid_888",
+          email: "player@togetherplay.test",
+          token: { uid: "player_appcheck_uid_888" } as any,
+        },
+      });
+
+      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          iceServers: [
+            { urls: "stun:stun.cloudflare.com:3478" },
+            {
+              urls: ["turn:turn.cloudflare.com:3478?transport=udp"],
+              username: "appcheck_authenticated_turn_user",
+              credential: "appcheck_authenticated_turn_pass",
+            },
+          ],
+        }),
+      } as Response);
+
+      const req = new NextRequest("http://localhost:3000/api/webrtc/ice-servers", {
+        headers: {
+          Authorization: "Bearer valid_mock_token",
+          "x-firebase-appcheck": "valid_attested_appcheck_token",
+        },
+      });
+
+      const response = await postIceServersRoute(req);
+      expect(response.status).toBe(200);
+
+      const data = await response.json();
+      expect(data.success).toBe(true);
+      expect(data.provider).toBe("cloudflare");
+      expect(data.hasTurnFallback).toBe(true);
+      expect(data.isProductionReliable).toBe(true);
+    });
+
+    it("gracefully falls back to STUN when Cloudflare API fails despite valid App Check and Auth", async () => {
+      process.env.ENFORCE_APP_CHECK = "true";
+      process.env.CLOUDFLARE_TURN_KEY_ID = MOCK_KEY_ID;
+      process.env.CLOUDFLARE_TURN_API_TOKEN = MOCK_API_TOKEN;
+
+      vi.spyOn(serverAuthModule, "requireServerAuth").mockResolvedValueOnce({
+        user: {
+          uid: "player_appcheck_uid_888",
+          email: "player@togetherplay.test",
+          token: { uid: "player_appcheck_uid_888" } as any,
+        },
+      });
+
+      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        json: async () => ({ errors: [{ message: "Bad Gateway" }] }),
+        text: async () => JSON.stringify({ errors: [{ message: "Bad Gateway" }] }),
+      } as unknown as Response);
+
+      const req = new NextRequest("http://localhost:3000/api/webrtc/ice-servers", {
+        headers: {
+          Authorization: "Bearer valid_mock_token",
+          "x-firebase-appcheck": "valid_attested_appcheck_token",
+        },
+      });
+
+      const response = await getIceServersRoute(req);
+      expect(response.status).toBe(200);
+
+      const data = await response.json();
+      expect(data.success).toBe(true);
+      expect(data.provider).toBe("default_stun");
+      expect(data.hasTurnFallback).toBe(false);
+      expect(data.iceServers.length).toBeGreaterThanOrEqual(3);
     });
   });
 

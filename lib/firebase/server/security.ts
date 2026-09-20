@@ -19,6 +19,7 @@ export interface AuthContext {
 
 export {
   verifyAppCheckToken,
+  verifyServerAppCheck,
   type AppCheckVerificationResult,
   type AppCheckVerificationOptions,
   type AppCheckErrorCode,

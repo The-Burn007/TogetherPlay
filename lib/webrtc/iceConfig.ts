@@ -141,6 +141,7 @@ export function clearIceConfigCache(): void {
  */
 export async function fetchServerIceConfiguration(options?: {
   idToken?: string;
+  appCheckToken?: string;
   forceRefresh?: boolean;
 }): Promise<IceConfigurationReport> {
   const now = Date.now();
@@ -169,11 +170,16 @@ export async function fetchServerIceConfiguration(options?: {
   }
 
   try {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+    };
+    if (options?.appCheckToken) {
+      headers["X-Firebase-AppCheck"] = options.appCheckToken;
+    }
+
     const response = await fetch("/api/webrtc/ice-servers", {
       method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers,
     });
 
     if (!response.ok) {

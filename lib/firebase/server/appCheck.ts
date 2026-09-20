@@ -269,6 +269,11 @@ export async function verifyAppCheckToken(
 }
 
 /**
+ * Canonical alias for verifyAppCheckToken.
+ */
+export const verifyServerAppCheck = verifyAppCheckToken;
+
+/**
  * Standard HTTP response for App Check failures.
  * Clearly tagged with category "APP_CHECK_ATTESTATION" to distinguish from user authentication.
  */

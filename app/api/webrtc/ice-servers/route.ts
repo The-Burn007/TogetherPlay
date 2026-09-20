@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireServerAuth } from "@/lib/firebase/server/auth";
-import { checkApiRateLimit } from "@/lib/firebase/server/security";
+import { checkApiRateLimit, requireAppCheck } from "@/lib/firebase/server/security";
 import {
   generateCloudflareTurnCredentials,
   isCloudflareTurnConfigured,
@@ -14,13 +14,19 @@ export const dynamic = "force-dynamic";
  * Generates short-lived TURN credentials from Cloudflare without exposing secrets to the browser.
  */
 async function handleIceServersRequest(req: NextRequest) {
-  // 1. Authenticate user identity strictly via Firebase ID token
+  // 1. Enforce App Check attestation (reject untrusted clients before processing TURN credentials)
+  const appCheckResult = await requireAppCheck(req);
+  if (!appCheckResult.success) {
+    return appCheckResult.errorResponse;
+  }
+
+  // 2. Authenticate user identity strictly via Firebase ID token
   const authResult = await requireServerAuth(req);
   if ("errorResponse" in authResult) {
     return authResult.errorResponse;
   }
 
-  // 2. Rate limit ICE credential generation to prevent upstream Cloudflare API exhaustion
+  // 3. Rate limit ICE credential generation to prevent upstream Cloudflare API exhaustion
   const rateLimit = checkApiRateLimit(`webrtc_ice_${authResult.user.uid}`, 30, 60000);
   if (!rateLimit.allowed) {
     return NextResponse.json(

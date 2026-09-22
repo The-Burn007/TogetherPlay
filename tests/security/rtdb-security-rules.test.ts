@@ -175,6 +175,32 @@ describe("Firebase Realtime Database Security Rules", () => {
         unauthDb.ref(`gameStates/${gameId}`).set({ hacked: true })
       );
     });
+
+    it("Strictly denies all client read and write access to privateGameStates node", async () => {
+      // Seed secret in privateGameStates via admin context
+      await testEnv.withSecurityRulesDisabled(async (adminCtx) => {
+        const adminDb = adminCtx.database();
+        await adminDb.ref(`privateGameStates/${gameId}`).set({
+          gameId,
+          targetId: "secret_artifact",
+          targetCode: "#999",
+        });
+      });
+
+      const aliceDb = testEnv.authenticatedContext(playerA).database();
+      const bobDb = testEnv.authenticatedContext(playerB).database();
+      const unauthDb = testEnv.unauthenticatedContext().database();
+
+      // Even active players cannot read private state
+      await assertFails(aliceDb.ref(`privateGameStates/${gameId}`).get());
+      await assertFails(bobDb.ref(`privateGameStates/${gameId}`).get());
+      await assertFails(aliceDb.ref(`privateGameStates/${gameId}/targetId`).get());
+      await assertFails(unauthDb.ref(`privateGameStates/${gameId}`).get());
+
+      // No client can write to private state
+      await assertFails(aliceDb.ref(`privateGameStates/${gameId}`).set({ targetId: "tamper" }));
+      await assertFails(unauthDb.ref(`privateGameStates/${gameId}`).set({ targetId: "tamper" }));
+    });
   });
 
   describe("WebRTC Signaling Authorization", () => {
@@ -328,12 +354,89 @@ describe("Firebase Realtime Database Security Rules", () => {
       const bobDb = testEnv.authenticatedContext(playerB).database();
 
       await aliceDb.ref(`presence/${playerA}`).set({
+        userId: playerA,
+        partnerId: playerB,
+        authorizedUsers: { [playerA]: true, [playerB]: true },
         online: true,
         lastSeen: Date.now(),
       });
 
       await assertSucceeds(
         bobDb.ref(`presence/${playerA}`).get()
+      );
+    });
+
+    it("Third authenticated user (outsider) CANNOT read another couple's presence", async () => {
+      const aliceDb = testEnv.authenticatedContext(playerA).database();
+      const charlieDb = testEnv.authenticatedContext(playerC).database();
+
+      await aliceDb.ref(`presence/${playerA}`).set({
+        userId: playerA,
+        partnerId: playerB,
+        authorizedUsers: { [playerA]: true, [playerB]: true },
+        online: true,
+        lastSeen: Date.now(),
+      });
+
+      // Charlie is an outsider (neither Alice nor Bob) -> reading Alice's presence MUST FAIL
+      await assertFails(
+        charlieDb.ref(`presence/${playerA}`).get()
+      );
+    });
+
+    it("Unauthenticated user CANNOT read presence", async () => {
+      const aliceDb = testEnv.authenticatedContext(playerA).database();
+      const unauthDb = testEnv.unauthenticatedContext().database();
+
+      await aliceDb.ref(`presence/${playerA}`).set({
+        userId: playerA,
+        partnerId: playerB,
+        authorizedUsers: { [playerA]: true, [playerB]: true },
+        online: true,
+        lastSeen: Date.now(),
+      });
+
+      await assertFails(
+        unauthDb.ref(`presence/${playerA}`).get()
+      );
+    });
+
+    it("Cannot spoof userId in presence payload", async () => {
+      const aliceDb = testEnv.authenticatedContext(playerA).database();
+
+      // Alice tries to spoof userId as playerB
+      await assertFails(
+        aliceDb.ref(`presence/${playerA}`).set({
+          userId: playerB,
+          partnerId: playerB,
+          online: true,
+        })
+      );
+    });
+
+    it("Cannot spoof partnerId with own uid", async () => {
+      const aliceDb = testEnv.authenticatedContext(playerA).database();
+
+      // Alice tries to self-partner
+      await assertFails(
+        aliceDb.ref(`presence/${playerA}`).set({
+          userId: playerA,
+          partnerId: playerA,
+          online: true,
+        })
+      );
+    });
+
+    it("Client-provided timestamp cannot be spoofed as authoritative server timestamp for lastSeenMs", async () => {
+      const aliceDb = testEnv.authenticatedContext(playerA).database();
+
+      // Client attempting to provide a fake numeric timestamp for lastSeenMs instead of serverTimestamp()
+      await assertFails(
+        aliceDb.ref(`presence/${playerA}`).set({
+          userId: playerA,
+          partnerId: playerB,
+          lastSeenMs: 123456789,
+        })
       );
     });
   });

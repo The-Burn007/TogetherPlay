@@ -313,9 +313,9 @@ export default function FindItFirstRoomPage() {
   const currentStatus = gameState?.status || "ready";
   const currentRound = gameState?.currentRound || 1;
   const maxRounds = gameState?.maxRounds || 5;
-  const targetId = String(gameState?.data?.targetId || "watch");
-  const targetName = String(gameState?.data?.targetName || "Pocket Watch");
-  const targetCode = String(gameState?.data?.targetCode || "#01");
+  const targetId = (gameState?.data?.targetId as string) || undefined;
+  const targetName = (gameState?.data?.targetName as string) || undefined;
+  const targetCode = (gameState?.data?.targetCode as string) || undefined;
   const targetClue = String(
     gameState?.data?.targetClue || "Precision horology with mechanical escapement"
   );
@@ -483,7 +483,7 @@ export default function FindItFirstRoomPage() {
               winnerPlayerId={roundWinnerId}
               pointsAwarded={pointsAwarded}
               speedBonus={speedBonus}
-              targetName={targetName}
+              targetName={targetName || "Target Artifact"}
               onNextRound={handleNextRound}
               isLastRound={currentRound >= maxRounds}
             />

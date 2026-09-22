@@ -7,7 +7,7 @@ import {
   serverTimestamp,
   type DatabaseReference,
 } from "firebase/database";
-import { rtdb } from "../client";
+import { rtdb, auth } from "../client";
 import type { PartnerPresence, PartnerTelemetry } from "@/types/domain";
 import type { PresenceState, ConnectionStatus, UserPresenceRecord } from "@/lib/presence/types";
 
@@ -20,7 +20,7 @@ export interface PresenceServiceContract {
   updateUserPresence(userId: string, telemetry: Partial<PartnerTelemetry>): Promise<void>;
   subscribeToPartnerPresence(partnerId: string, callback: (presence: PartnerPresence | null) => void): () => void;
   sendPartnerNudge(targetPartnerId: string, message: string): Promise<boolean>;
-  setPresenceState(userId: string, state: PresenceState, activity?: string, gameId?: string): Promise<void>;
+  setPresenceState(userId: string, state: PresenceState, activity?: string, gameId?: string, partnerId?: string): Promise<void>;
   subscribeToUserPresence(userId: string, callback: (record: UserPresenceRecord | null) => void): () => void;
   initializePresenceLifecycle(
     userId: string,
@@ -28,6 +28,8 @@ export interface PresenceServiceContract {
       displayName: string;
       city?: string;
       colorRole?: "ember" | "sage";
+      partnerId?: string;
+      coupleId?: string;
     }
   ): () => void;
 }
@@ -42,6 +44,8 @@ export class FirebasePresenceService implements PresenceServiceContract {
     // Seed default baseline for Tokyo partner (Sam) and London partner (Alex)
     this.seedBaselinePresence("partner_sam", {
       userId: "partner_sam",
+      partnerId: "user_alex",
+      authorizedUsers: { partner_sam: true, user_alex: true },
       displayName: "Sam",
       state: "ONLINE",
       connectionStatus: "online",
@@ -55,6 +59,8 @@ export class FirebasePresenceService implements PresenceServiceContract {
 
     this.seedBaselinePresence("user_sam", {
       userId: "user_sam",
+      partnerId: "user_alex",
+      authorizedUsers: { user_sam: true, user_alex: true },
       displayName: "Sam",
       state: "ONLINE",
       connectionStatus: "online",
@@ -68,6 +74,8 @@ export class FirebasePresenceService implements PresenceServiceContract {
 
     this.seedBaselinePresence("user_alex", {
       userId: "user_alex",
+      partnerId: "user_sam",
+      authorizedUsers: { user_sam: true, user_alex: true },
       displayName: "Alex",
       state: "ONLINE",
       connectionStatus: "online",
@@ -126,12 +134,26 @@ export class FirebasePresenceService implements PresenceServiceContract {
 
     try {
       if (rtdb && userId) {
-        await update(ref(rtdb, `presence/${userId}`), {
+        // Enforce: only authenticated user can write their own presence
+        if (auth?.currentUser && auth.currentUser.uid !== userId) {
+          return;
+        }
+        const effectivePartnerId = updated.partnerId || (userId === "user_sam" ? "user_alex" : userId === "user_alex" ? "user_sam" : undefined);
+        const presenceUpdate: Record<string, unknown> = {
+          userId,
           state: updated.state,
           connectionStatus: updated.connectionStatus,
           currentActivity: updated.currentActivity || "",
           lastSeenMs: serverTimestamp(),
-        });
+        };
+        if (effectivePartnerId && effectivePartnerId !== userId) {
+          presenceUpdate.partnerId = effectivePartnerId;
+          presenceUpdate.authorizedUsers = {
+            [userId]: true,
+            [effectivePartnerId]: true,
+          };
+        }
+        await update(ref(rtdb, `presence/${userId}`), presenceUpdate);
       }
     } catch {
       // Offline fallback
@@ -194,9 +216,15 @@ export class FirebasePresenceService implements PresenceServiceContract {
     userId: string,
     state: PresenceState,
     activity?: string,
-    gameId?: string
+    gameId?: string,
+    partnerId?: string
   ): Promise<void> {
     const existing = this.memoryPresence.get(userId);
+    const effectivePartnerId =
+      partnerId ||
+      existing?.partnerId ||
+      (userId === "user_sam" ? "user_alex" : userId === "user_alex" ? "user_sam" : undefined);
+
     const updated: UserPresenceRecord = {
       userId,
       displayName: existing?.displayName || (userId.includes("sam") ? "Sam" : "Alex"),
@@ -207,6 +235,11 @@ export class FirebasePresenceService implements PresenceServiceContract {
       gameId: gameId ?? existing?.gameId,
       city: existing?.city || (userId.includes("sam") ? "Tokyo" : "London"),
       colorRole: existing?.colorRole || (userId.includes("sam") ? "sage" : "ember"),
+      partnerId: effectivePartnerId,
+      authorizedUsers: effectivePartnerId
+        ? { [userId]: true, [effectivePartnerId]: true }
+        : existing?.authorizedUsers,
+      coupleId: existing?.coupleId,
     };
 
     this.memoryPresence.set(userId, updated);
@@ -214,18 +247,54 @@ export class FirebasePresenceService implements PresenceServiceContract {
 
     try {
       if (rtdb && userId) {
+        // Enforce: only authenticated user can write their own presence
+        if (auth?.currentUser && auth.currentUser.uid !== userId) {
+          return;
+        }
         const presenceRef = ref(rtdb, `presence/${userId}`);
-        await update(presenceRef, {
+        const updatePayload: Record<string, unknown> = {
+          userId,
           state,
           connectionStatus: updated.connectionStatus,
           currentActivity: updated.currentActivity || "",
           gameId: updated.gameId || null,
           lastSeenMs: serverTimestamp(),
-        });
+        };
+        if (effectivePartnerId && effectivePartnerId !== userId) {
+          updatePayload.partnerId = effectivePartnerId;
+          updatePayload.authorizedUsers = {
+            [userId]: true,
+            [effectivePartnerId]: true,
+          };
+        }
+        if (updated.coupleId) {
+          updatePayload.coupleId = updated.coupleId;
+        }
+        await update(presenceRef, updatePayload);
       }
     } catch {
       // Local fallback
     }
+  }
+
+  setLocalSimulatedPartnerPresence(userId: string, state: PresenceState): void {
+    const existing = this.memoryPresence.get(userId);
+    const updated: UserPresenceRecord = {
+      userId,
+      displayName: existing?.displayName || (userId.includes("sam") ? "Sam" : "Alex"),
+      state,
+      connectionStatus: state === "OFFLINE" ? "offline" : "online",
+      lastSeenMs: Date.now(),
+      currentActivity: `Simulated as ${state}`,
+      city: existing?.city || (userId.includes("sam") ? "Tokyo" : "London"),
+      colorRole: existing?.colorRole || (userId.includes("sam") ? "sage" : "ember"),
+      partnerId: existing?.partnerId,
+      authorizedUsers: existing?.authorizedUsers,
+      coupleId: existing?.coupleId,
+    };
+
+    this.memoryPresence.set(userId, updated);
+    this.notifySubscribers(userId, updated);
   }
 
   subscribeToUserPresence(
@@ -237,9 +306,22 @@ export class FirebasePresenceService implements PresenceServiceContract {
     }
     this.subscribers.get(userId)!.add(callback);
 
-    // Provide initial state immediately
     const initial = this.memoryPresence.get(userId) || null;
-    callback(initial);
+    const currentUid = auth?.currentUser?.uid;
+
+    // Check privacy authorization before emitting initial memory cache
+    const isAuthorized =
+      !currentUid ||
+      currentUid === userId ||
+      (initial && initial.partnerId === currentUid) ||
+      (initial && initial.authorizedUsers && initial.authorizedUsers[currentUid]) ||
+      ((currentUid === "user_sam" || currentUid === "user_alex") && (userId === "user_sam" || userId === "user_alex"));
+
+    if (isAuthorized) {
+      callback(initial);
+    } else {
+      callback(null);
+    }
 
     // RTDB listener
     let rtdbUnsub: (() => void) | null = null;
@@ -264,14 +346,17 @@ export class FirebasePresenceService implements PresenceServiceContract {
                 timezone: val.timezone,
                 colorRole: val.colorRole || (userId.includes("sam") ? "sage" : "ember"),
                 latencyMs: val.latencyMs || 28,
+                partnerId: val.partnerId,
+                coupleId: val.coupleId,
+                authorizedUsers: val.authorizedUsers,
               };
               this.memoryPresence.set(userId, record);
               callback(record);
             }
           },
           () => {
-            // RTDB error fallback: retain memoryPresence
-            callback(this.memoryPresence.get(userId) || null);
+            // Privacy protection: do not leak presence to unauthorized caller on permission denied
+            callback(null);
           }
         );
       }
@@ -295,16 +380,49 @@ export class FirebasePresenceService implements PresenceServiceContract {
       displayName: string;
       city?: string;
       colorRole?: "ember" | "sage";
+      partnerId?: string;
+      coupleId?: string;
     }
   ): () => void {
     if (!userId || typeof window === "undefined") {
       return () => {};
     }
 
+    const effectivePartnerId =
+      metadata.partnerId ||
+      (userId === "user_sam" ? "user_alex" : userId === "user_alex" ? "user_sam" : undefined);
+
+    const existing = this.memoryPresence.get(userId) || {
+      userId,
+      displayName: metadata.displayName,
+      state: "ONLINE",
+      connectionStatus: "online",
+      lastSeenMs: Date.now(),
+      city: metadata.city || "London",
+      colorRole: metadata.colorRole || "ember",
+    };
+
+    if (effectivePartnerId) {
+      existing.partnerId = effectivePartnerId;
+      existing.authorizedUsers = {
+        [userId]: true,
+        [effectivePartnerId]: true,
+      };
+    }
+    if (metadata.coupleId) {
+      existing.coupleId = metadata.coupleId;
+    }
+    this.memoryPresence.set(userId, existing);
+
     let connectedUnsub: (() => void) | null = null;
 
     try {
       if (rtdb) {
+        // Enforce: only authenticated user can initialize lifecycle for self
+        if (auth?.currentUser && auth.currentUser.uid !== userId) {
+          return () => {};
+        }
+
         const connectedRef = ref(rtdb, ".info/connected");
         const presenceRef = ref(rtdb, `presence/${userId}`);
 
@@ -320,15 +438,29 @@ export class FirebasePresenceService implements PresenceServiceContract {
               });
 
               // Mark self as ONLINE
-              await update(presenceRef, {
+              const onlinePayload: Record<string, unknown> = {
                 userId,
                 displayName: metadata.displayName,
                 state: "ONLINE",
                 connectionStatus: "online",
-                city: metadata.city || "London",
-                colorRole: metadata.colorRole || "ember",
+                city: metadata.city || (userId.includes("sam") ? "Tokyo" : "London"),
+                colorRole: metadata.colorRole || (userId.includes("sam") ? "sage" : "ember"),
                 lastSeenMs: serverTimestamp(),
-              });
+              };
+
+              if (effectivePartnerId && effectivePartnerId !== userId) {
+                onlinePayload.partnerId = effectivePartnerId;
+                onlinePayload.authorizedUsers = {
+                  [userId]: true,
+                  [effectivePartnerId]: true,
+                };
+              }
+
+              if (metadata.coupleId) {
+                onlinePayload.coupleId = metadata.coupleId;
+              }
+
+              await update(presenceRef, onlinePayload);
             } catch {
               // Silently handle disconnection handler setup
             }
@@ -347,6 +479,9 @@ export class FirebasePresenceService implements PresenceServiceContract {
       // On unmount/logout, attempt graceful OFFLINE mark
       try {
         if (rtdb) {
+          if (auth?.currentUser && auth.currentUser.uid !== userId) {
+            return;
+          }
           const presenceRef = ref(rtdb, `presence/${userId}`);
           update(presenceRef, {
             state: "OFFLINE",

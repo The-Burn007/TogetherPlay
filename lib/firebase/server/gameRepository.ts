@@ -17,12 +17,54 @@ import {
   getAdminDatabase,
   isAdminFirebaseConfigured,
 } from "./admin";
-import type { GameSession, GameState, GameResult } from "@/types/domain";
-import { PersistenceError } from "./errors";
+import type {
+  GameSession,
+  GameState,
+  PublicGameState,
+  GameResult,
+  PrivateGameState,
+  ActionClaimRecord,
+} from "@/types/domain";
+import { ACTION_CLAIM_TTL_MS, MAX_BOUNDED_PROCESSED_ACTIONS } from "@/types/domain";
+import { PersistenceError, type ActionErrorCode } from "./errors";
 import { logStructuredError } from "./logger";
+import { getPublicState, getPrivateState } from "@/lib/games/gameStateContract";
 
 export { PersistenceError } from "./errors";
+export type { PrivateGameState, ActionClaimRecord };
+export { ACTION_CLAIM_TTL_MS, MAX_BOUNDED_PROCESSED_ACTIONS };
 export { logStructuredError, type ErrorCategory, type StructuredLogPayload } from "./logger";
+
+export interface ActionClaimCheckResult {
+  allowed: boolean;
+  error?: ActionErrorCode;
+  errorMessage?: string;
+  existingGameId?: string;
+  existingPlayerId?: string;
+  existingType?: string;
+  isCompleted?: boolean;
+  cachedRecord?: ActionClaimRecord;
+}
+
+export function computePayloadFingerprint(payload: unknown): string {
+  if (payload === undefined || payload === null) return "";
+  if (typeof payload !== "object") return String(payload);
+  try {
+    const sortObject = (obj: any): any => {
+      if (obj === null || typeof obj !== "object") return obj;
+      if (Array.isArray(obj)) return obj.map(sortObject);
+      return Object.keys(obj)
+        .sort()
+        .reduce((res: Record<string, unknown>, key: string) => {
+          res[key] = sortObject(obj[key]);
+          return res;
+        }, {});
+    };
+    return JSON.stringify(sortObject(payload));
+  } catch {
+    return JSON.stringify(payload);
+  }
+}
 
 if (typeof window !== "undefined") {
   throw new Error("Security Violation: ServerGameRepository cannot be loaded in client browser bundle.");
@@ -35,9 +77,13 @@ export interface PersistenceFailureSimulation {
   failSaveEphemeralGameState?: boolean | Error;
   failTransactEphemeralGameState?: boolean | Error;
   failCheckAndClaimActionId?: boolean | Error;
+  failCompleteActionClaim?: boolean | Error;
+  failCleanupExpiredActionClaims?: boolean | Error;
   failSaveGameResult?: boolean | Error;
   failGetGameResult?: boolean | Error;
   failGetActionClaim?: boolean | Error;
+  failGetPrivateGameState?: boolean | Error;
+  failSavePrivateGameState?: boolean | Error;
 }
 
 /**
@@ -52,14 +98,16 @@ export interface PersistenceFailureSimulation {
 export class IsolatedTestGameStore {
   readonly memorySessions = new Map<string, GameSession>();
   readonly memoryStates = new Map<string, GameState>();
+  readonly memoryPrivateStates = new Map<string, PrivateGameState>();
   readonly memoryResults = new Map<string, GameResult>();
-  readonly memoryActionClaims = new Map<string, { gameId: string; playerId: string; timestamp: number }>();
+  readonly memoryActionClaims = new Map<string, ActionClaimRecord>();
   readonly gameLocks = new Map<string, Promise<void>>();
   readonly actionClaimLocks = new Map<string, Promise<void>>();
 
   clear(): void {
     this.memorySessions.clear();
     this.memoryStates.clear();
+    this.memoryPrivateStates.clear();
     this.memoryResults.clear();
     this.memoryActionClaims.clear();
     this.gameLocks.clear();
@@ -136,21 +184,36 @@ export interface GameRepositoryContract {
     updateFn: (currentState: GameState | null) => TransactionUpdateResult<T>
   ): Promise<TransactionOutcome<T>>;
 
+  // Private Server-Side State operations (strictly denied to client RTDB rules)
+  getPrivateGameState(gameId: string): Promise<PrivateGameState | null>;
+  savePrivateGameState(gameId: string, state: PrivateGameState): Promise<void>;
+
   // Action ID Scoping & Cross-Game Replay Prevention
   checkAndClaimActionId(
     clientActionId: string,
     gameId: string,
     playerId: string,
+    timestamp?: number,
+    actionType?: string,
+    actionPayload?: unknown
+  ): Promise<ActionClaimCheckResult>;
+  completeActionClaim(
+    clientActionId: string,
+    gameId: string,
+    playerId: string,
+    stateVersion: number,
+    resultPayload?: unknown,
     timestamp?: number
-  ): Promise<{ allowed: boolean; existingGameId?: string }>;
-  getActionClaim(clientActionId: string): Promise<{ gameId: string; playerId: string; timestamp: number } | null>;
+  ): Promise<void>;
+  cleanupExpiredActionClaims(now?: number): Promise<{ cleanedCount: number }>;
+  getActionClaim(clientActionId: string): Promise<ActionClaimRecord | null>;
 
   // Combined atomic snapshot
   getGameAggregate(gameId: string): Promise<{ session: GameSession; state: GameState } | null>;
 
   // Testing & Reset helpers (strictly isolated from production authority)
   clearForTesting(): void;
-  seedGame(session: GameSession, state?: GameState): void;
+  seedGame(session: GameSession, state?: GameState, privateState?: PrivateGameState): void;
   simulatePersistenceFailure(sim: PersistenceFailureSimulation): void;
   clearPersistenceFailureSimulation(): void;
 }
@@ -252,7 +315,7 @@ export class ServerGameRepository implements GameRepositoryContract {
     this.simulation = null;
   }
 
-  seedGame(session: GameSession, state?: GameState): void {
+  seedGame(session: GameSession, state?: GameState, privateState?: PrivateGameState): void {
     if (!this.testStore) {
       throw new Error(
         "Invalid Operation: seedGame is an isolated test fixture helper. Live ServerGameRepository persists only to Firebase."
@@ -260,6 +323,20 @@ export class ServerGameRepository implements GameRepositoryContract {
     }
     this.testStore.memorySessions.set(session.gameId, { ...session });
     if (state) {
+      if (privateState) {
+        this.testStore.memoryPrivateStates.set(session.gameId, JSON.parse(JSON.stringify(privateState)));
+      } else if (state.data && (state.data.targetId || state.data.targetName || state.data.targetCode || state.data.targetAnswer)) {
+        this.testStore.memoryPrivateStates.set(session.gameId, {
+          gameId: session.gameId,
+          targetId: state.data.targetId as string | undefined,
+          targetName: state.data.targetName as string | undefined,
+          targetCode: state.data.targetCode as string | undefined,
+          targetClue: state.data.targetClue as string | undefined,
+          targetAnswer: state.data.targetAnswer as string | undefined,
+          usedTargetIds: state.data.usedTargetIds as string[] | undefined,
+        });
+      }
+
       this.testStore.memoryStates.set(session.gameId, {
         ...state,
         processedActions: state.processedActions || {},
@@ -270,6 +347,8 @@ export class ServerGameRepository implements GameRepositoryContract {
             gameId: session.gameId,
             playerId: session.createdBy,
             timestamp: ts,
+            status: "completed",
+            expiresAt: ts + ACTION_CLAIM_TTL_MS,
           });
         }
       }
@@ -493,24 +572,41 @@ export class ServerGameRepository implements GameRepositoryContract {
   async saveEphemeralGameState(state: GameState): Promise<void> {
     this.checkSimulatedFailure("failSaveEphemeralGameState", "saveEphemeralGameState", state.gameId);
 
+    // If state contains private/secret fields that have not yet been migrated to private state,
+    // ensure private state is preserved in isolated storage before stripping from public state
+    const extractedPrivate = getPrivateState({ state });
+    if (extractedPrivate && (extractedPrivate.targetId || extractedPrivate.targetAnswer)) {
+      try {
+        const existingPrivate = await this.getPrivateGameState(state.gameId);
+        if (!existingPrivate) {
+          await this.savePrivateGameState(state.gameId, extractedPrivate);
+        }
+      } catch {
+        // Ignore errors checking/saving private state in non-configured environments
+      }
+    }
+
+    // Defense-in-depth: Ensure state persisted to public RTDB gameStates/ is strictly PublicGameState
+    const publicState = getPublicState({ state });
+
     if (this.useLiveBackend) {
       try {
         const rtdb = getAdminDatabase();
-        await rtdb.ref(`gameStates/${state.gameId}`).set(state);
+        await rtdb.ref(`gameStates/${publicState.gameId}`).set(publicState);
         return;
       } catch (err) {
         logStructuredError({
           requestId: "internal_repo",
-          gameId: state.gameId,
+          gameId: publicState.gameId,
           actionId: "none",
           errorCategory: "PERSISTENCE_FAILURE",
           operation: "saveEphemeralGameState",
           message: `RTDB saveEphemeralGameState failed: ${err instanceof Error ? err.message : String(err)}`,
           error: err,
         });
-        throw new PersistenceError(`Failed to commit ephemeral game state '${state.gameId}' to persistent store.`, {
+        throw new PersistenceError(`Failed to commit ephemeral game state '${publicState.gameId}' to persistent store.`, {
           operation: "saveEphemeralGameState",
-          gameId: state.gameId,
+          gameId: publicState.gameId,
           cause: err,
         });
       }
@@ -519,10 +615,80 @@ export class ServerGameRepository implements GameRepositoryContract {
     if (!this.testStore) {
       throw new PersistenceError("No live backend or test store configured for saveEphemeralGameState.", {
         operation: "saveEphemeralGameState",
-        gameId: state.gameId,
+        gameId: publicState.gameId,
       });
     }
-    this.testStore.memoryStates.set(state.gameId, JSON.parse(JSON.stringify(state)) as GameState);
+    this.testStore.memoryStates.set(publicState.gameId, JSON.parse(JSON.stringify(publicState)) as GameState);
+  }
+
+  // --- Private Server-Side State Operations (Deny-All Client RTDB Rules) ---
+  async getPrivateGameState(gameId: string): Promise<PrivateGameState | null> {
+    this.checkSimulatedFailure("failGetPrivateGameState", "getPrivateGameState", gameId);
+
+    if (this.useLiveBackend) {
+      try {
+        const rtdb = getAdminDatabase();
+        const snap = await rtdb.ref(`privateGameStates/${gameId}`).get();
+        if (snap.exists()) {
+          return snap.val() as PrivateGameState;
+        }
+        return null;
+      } catch (err) {
+        logStructuredError({
+          requestId: "internal_repo",
+          gameId,
+          actionId: "none",
+          errorCategory: "PERSISTENCE_FAILURE",
+          operation: "getPrivateGameState",
+          message: `RTDB getPrivateGameState failed: ${err instanceof Error ? err.message : String(err)}`,
+          error: err,
+        });
+        throw new PersistenceError(`Failed to read private game state '${gameId}' from persistent store.`, {
+          operation: "getPrivateGameState",
+          gameId,
+          cause: err,
+        });
+      }
+    }
+
+    if (!this.testStore) return null;
+    const memory = this.testStore.memoryPrivateStates.get(gameId);
+    return memory ? (JSON.parse(JSON.stringify(memory)) as PrivateGameState) : null;
+  }
+
+  async savePrivateGameState(gameId: string, state: PrivateGameState): Promise<void> {
+    this.checkSimulatedFailure("failSavePrivateGameState", "savePrivateGameState", gameId);
+
+    if (this.useLiveBackend) {
+      try {
+        const rtdb = getAdminDatabase();
+        await rtdb.ref(`privateGameStates/${gameId}`).set(state);
+        return;
+      } catch (err) {
+        logStructuredError({
+          requestId: "internal_repo",
+          gameId,
+          actionId: "none",
+          errorCategory: "PERSISTENCE_FAILURE",
+          operation: "savePrivateGameState",
+          message: `RTDB savePrivateGameState failed: ${err instanceof Error ? err.message : String(err)}`,
+          error: err,
+        });
+        throw new PersistenceError(`Failed to commit private game state '${gameId}' to persistent store.`, {
+          operation: "savePrivateGameState",
+          gameId,
+          cause: err,
+        });
+      }
+    }
+
+    if (!this.testStore) {
+      throw new PersistenceError("No live backend or test store configured for savePrivateGameState.", {
+        operation: "savePrivateGameState",
+        gameId,
+      });
+    }
+    this.testStore.memoryPrivateStates.set(gameId, JSON.parse(JSON.stringify(state)) as PrivateGameState);
   }
 
   /**
@@ -657,9 +823,14 @@ export class ServerGameRepository implements GameRepositoryContract {
     clientActionId: string,
     gameId: string,
     playerId: string,
-    timestamp: number = Date.now()
-  ): Promise<{ allowed: boolean; existingGameId?: string }> {
+    timestamp: number = Date.now(),
+    actionType?: string,
+    actionPayload?: unknown
+  ): Promise<ActionClaimCheckResult> {
     this.checkSimulatedFailure("failCheckAndClaimActionId", "checkAndClaimActionId", gameId, clientActionId);
+
+    const incomingFingerprint = computePayloadFingerprint(actionPayload);
+    const expiresAt = timestamp + ACTION_CLAIM_TTL_MS;
 
     if (this.useLiveBackend) {
       try {
@@ -667,23 +838,106 @@ export class ServerGameRepository implements GameRepositoryContract {
         const sanitizedKey = encodeURIComponent(clientActionId).replace(/\./g, "%2E");
         const claimRef = rtdb.ref(`actionClaims/${sanitizedKey}`);
 
-        let existingGameId: string | undefined;
-        let allowed = true;
+        let resultOutcome: ActionClaimCheckResult = { allowed: true };
 
         await claimRef.transaction((current) => {
           if (current && typeof current === "object" && "gameId" in current) {
-            const currentClaim = current as { gameId: string; playerId: string; timestamp: number };
-            if (currentClaim.gameId && currentClaim.gameId !== gameId) {
-              existingGameId = currentClaim.gameId;
-              allowed = false;
+            const existing = current as ActionClaimRecord;
+
+            // 1. Check expiration: if expired, claim can be renewed
+            if (existing.expiresAt && existing.expiresAt <= timestamp) {
+              resultOutcome = { allowed: true, isCompleted: false };
+              return {
+                gameId,
+                playerId,
+                timestamp,
+                type: actionType,
+                payloadHash: incomingFingerprint,
+                status: "pending",
+                expiresAt,
+              };
+            }
+
+            // 2. Cross-game reuse check
+            if (existing.gameId && existing.gameId !== gameId) {
+              resultOutcome = {
+                allowed: false,
+                error: "ACTION_ID_REUSED_CROSS_GAME",
+                existingGameId: existing.gameId,
+                errorMessage: `Security violation: Action ID '${clientActionId}' is already associated with game '${existing.gameId}' and cannot be reused in game '${gameId}'.`,
+              };
               return undefined; // abort transaction in RTDB
             }
-            return current; // keep current claim
+
+            // 3. Different player reuse check
+            if (existing.playerId && existing.playerId !== playerId) {
+              resultOutcome = {
+                allowed: false,
+                error: "ACTION_ID_REUSED_BY_OTHER_PLAYER",
+                existingPlayerId: existing.playerId,
+                errorMessage: `Security violation: Action ID '${clientActionId}' was claimed by player '${existing.playerId}' and cannot be reused by player '${playerId}'.`,
+              };
+              return undefined; // abort transaction in RTDB
+            }
+
+            // 4. Action type mismatch
+            if (actionType && existing.type && existing.type !== actionType) {
+              resultOutcome = {
+                allowed: false,
+                error: "INVALID_ACTION",
+                existingType: existing.type,
+                errorMessage: `Action ID '${clientActionId}' was originally submitted as type '${existing.type}', but received '${actionType}'.`,
+              };
+              return undefined;
+            }
+
+            // 5. Payload mismatch
+            if (
+              incomingFingerprint &&
+              existing.payloadHash &&
+              existing.payloadHash !== incomingFingerprint
+            ) {
+              resultOutcome = {
+                allowed: false,
+                error: "INVALID_ACTION_PAYLOAD",
+                errorMessage: `Action ID '${clientActionId}' was previously submitted with a different payload.`,
+              };
+              return undefined;
+            }
+
+            // 6. Completed action
+            if (existing.status === "completed") {
+              resultOutcome = {
+                allowed: true,
+                isCompleted: true,
+                cachedRecord: existing,
+              };
+              return current; // keep current claim
+            }
+
+            // 7. Pending action (simultaneous attempt or retry after error)
+            resultOutcome = {
+              allowed: true,
+              isCompleted: false,
+              cachedRecord: existing,
+            };
+            return current;
           }
-          return { gameId, playerId, timestamp };
+
+          // Brand new claim
+          resultOutcome = { allowed: true, isCompleted: false };
+          return {
+            gameId,
+            playerId,
+            timestamp,
+            type: actionType,
+            payloadHash: incomingFingerprint,
+            status: "pending",
+            expiresAt,
+          };
         });
 
-        return { allowed, existingGameId };
+        return resultOutcome;
       } catch (err) {
         logStructuredError({
           requestId: "internal_repo",
@@ -714,19 +968,219 @@ export class ServerGameRepository implements GameRepositoryContract {
 
     return this.testStore.withActionClaimLock(clientActionId, async () => {
       const existing = this.testStore!.memoryActionClaims.get(clientActionId);
-      if (existing && existing.gameId !== gameId) {
-        return { allowed: false, existingGameId: existing.gameId };
+
+      if (existing) {
+        // 1. Expiration check
+        if (existing.expiresAt && existing.expiresAt <= timestamp) {
+          const freshClaim: ActionClaimRecord = {
+            gameId,
+            playerId,
+            timestamp,
+            type: actionType,
+            payloadHash: incomingFingerprint,
+            status: "pending",
+            expiresAt,
+          };
+          this.testStore!.memoryActionClaims.set(clientActionId, freshClaim);
+          return { allowed: true, isCompleted: false };
+        }
+
+        // 2. Cross-game reuse check
+        if (existing.gameId && existing.gameId !== gameId) {
+          return {
+            allowed: false,
+            error: "ACTION_ID_REUSED_CROSS_GAME",
+            existingGameId: existing.gameId,
+            errorMessage: `Security violation: Action ID '${clientActionId}' is already associated with game '${existing.gameId}' and cannot be reused in game '${gameId}'.`,
+          };
+        }
+
+        // 3. Different player reuse check
+        if (existing.playerId && existing.playerId !== playerId) {
+          return {
+            allowed: false,
+            error: "ACTION_ID_REUSED_BY_OTHER_PLAYER",
+            existingPlayerId: existing.playerId,
+            errorMessage: `Security violation: Action ID '${clientActionId}' was claimed by player '${existing.playerId}' and cannot be reused by player '${playerId}'.`,
+          };
+        }
+
+        // 4. Action type mismatch
+        if (actionType && existing.type && existing.type !== actionType) {
+          return {
+            allowed: false,
+            error: "INVALID_ACTION",
+            existingType: existing.type,
+            errorMessage: `Action ID '${clientActionId}' was originally submitted as type '${existing.type}', but received '${actionType}'.`,
+          };
+        }
+
+        // 5. Payload mismatch
+        if (
+          incomingFingerprint &&
+          existing.payloadHash &&
+          existing.payloadHash !== incomingFingerprint
+        ) {
+          return {
+            allowed: false,
+            error: "INVALID_ACTION_PAYLOAD",
+            errorMessage: `Action ID '${clientActionId}' was previously submitted with a different payload.`,
+          };
+        }
+
+        // 6. Completed action
+        if (existing.status === "completed") {
+          return {
+            allowed: true,
+            isCompleted: true,
+            cachedRecord: { ...existing },
+          };
+        }
+
+        // 7. Pending action
+        return {
+          allowed: true,
+          isCompleted: false,
+          cachedRecord: { ...existing },
+        };
       }
-      if (!existing) {
-        this.testStore!.memoryActionClaims.set(clientActionId, { gameId, playerId, timestamp });
-      }
-      return { allowed: true };
+
+      // Brand new claim
+      const newClaim: ActionClaimRecord = {
+        gameId,
+        playerId,
+        timestamp,
+        type: actionType,
+        payloadHash: incomingFingerprint,
+        status: "pending",
+        expiresAt,
+      };
+      this.testStore!.memoryActionClaims.set(clientActionId, newClaim);
+      return { allowed: true, isCompleted: false };
     });
+  }
+
+  async completeActionClaim(
+    clientActionId: string,
+    gameId: string,
+    playerId: string,
+    stateVersion: number,
+    resultPayload?: unknown,
+    timestamp: number = Date.now()
+  ): Promise<void> {
+    this.checkSimulatedFailure("failCompleteActionClaim", "completeActionClaim", gameId, clientActionId);
+
+    if (this.useLiveBackend) {
+      try {
+        const rtdb = getAdminDatabase();
+        const sanitizedKey = encodeURIComponent(clientActionId).replace(/\./g, "%2E");
+        const claimRef = rtdb.ref(`actionClaims/${sanitizedKey}`);
+        const updateData = {
+          status: "completed" as const,
+          stateVersion,
+          resultPayload: resultPayload !== undefined ? resultPayload : null,
+          completedAt: timestamp,
+        };
+
+        if (typeof (claimRef as any).update === "function") {
+          await (claimRef as any).update(updateData);
+        } else {
+          await claimRef.transaction((current: any) => {
+            if (!current) return updateData;
+            return { ...current, ...updateData };
+          });
+        }
+      } catch (err) {
+        logStructuredError({
+          requestId: "internal_repo",
+          gameId,
+          actionId: clientActionId,
+          playerId,
+          errorCategory: "PERSISTENCE_FAILURE",
+          operation: "completeActionClaim",
+          message: `Failed to complete action claim in RTDB: ${err instanceof Error ? err.message : String(err)}`,
+          error: err,
+        });
+        // Non-fatal if state transaction already committed
+      }
+      return;
+    }
+
+    if (this.testStore) {
+      await this.testStore.withActionClaimLock(clientActionId, async () => {
+        const existing = this.testStore!.memoryActionClaims.get(clientActionId);
+        if (existing) {
+          existing.status = "completed";
+          existing.stateVersion = stateVersion;
+          existing.resultPayload = resultPayload;
+          existing.completedAt = timestamp;
+        }
+      });
+    }
+  }
+
+  async cleanupExpiredActionClaims(
+    now: number = Date.now(),
+    maxAgeMs: number = ACTION_CLAIM_TTL_MS
+  ): Promise<{ cleanedCount: number }> {
+    this.checkSimulatedFailure("failCleanupExpiredActionClaims", "cleanupExpiredActionClaims");
+
+    let cleanedCount = 0;
+
+    if (this.useLiveBackend) {
+      try {
+        const rtdb = getAdminDatabase();
+        const claimsRef = rtdb.ref("actionClaims");
+        const snap = await claimsRef.get();
+        if (snap.exists()) {
+          const claims = snap.val() as Record<string, ActionClaimRecord>;
+          const updates: Record<string, null> = {};
+          for (const [key, claim] of Object.entries(claims)) {
+            const isExpired =
+              (claim.expiresAt && claim.expiresAt <= now) ||
+              (claim.timestamp && now - claim.timestamp > maxAgeMs);
+            if (isExpired) {
+              updates[key] = null;
+              cleanedCount++;
+            }
+          }
+          if (cleanedCount > 0) {
+            await claimsRef.update(updates);
+          }
+        }
+        return { cleanedCount };
+      } catch (err) {
+        logStructuredError({
+          requestId: "internal_repo",
+          gameId: "none",
+          actionId: "none",
+          errorCategory: "PERSISTENCE_FAILURE",
+          operation: "cleanupExpiredActionClaims",
+          message: `Failed cleanup of expired action claims: ${err instanceof Error ? err.message : String(err)}`,
+          error: err,
+        });
+        return { cleanedCount: 0 };
+      }
+    }
+
+    if (this.testStore) {
+      for (const [key, claim] of Array.from(this.testStore.memoryActionClaims.entries())) {
+        const isExpired =
+          (claim.expiresAt && claim.expiresAt <= now) ||
+          (claim.timestamp && now - claim.timestamp > maxAgeMs);
+        if (isExpired) {
+          this.testStore.memoryActionClaims.delete(key);
+          cleanedCount++;
+        }
+      }
+    }
+
+    return { cleanedCount };
   }
 
   async getActionClaim(
     clientActionId: string
-  ): Promise<{ gameId: string; playerId: string; timestamp: number } | null> {
+  ): Promise<ActionClaimRecord | null> {
     this.checkSimulatedFailure("failGetActionClaim", "getActionClaim", undefined, clientActionId);
 
     if (this.useLiveBackend) {

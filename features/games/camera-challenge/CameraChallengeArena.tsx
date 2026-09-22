@@ -26,6 +26,7 @@ import { CameraPortalFrame } from "./CameraPortalFrame";
 import { ChallengeTypographyBanner } from "./ChallengeTypographyBanner";
 import { EventCountdownOverlay } from "./EventCountdownOverlay";
 import { EventSubmitOverlay } from "./EventSubmitOverlay";
+import { PartnerReviewOverlay } from "./PartnerReviewOverlay";
 import { ChallengeResultModal } from "./ChallengeResultModal";
 import { cameraChallengeAudio } from "./cameraChallengeAudio";
 import { authoritativeGameClient } from "@/lib/firebase/services/authoritativeGameClient";
@@ -33,6 +34,7 @@ import { CAMERA_CHALLENGES } from "@/lib/games/definitions";
 import { secureRandomInt } from "@/lib/utils/crypto";
 import type {
   CameraChallengePrompt,
+  CameraChallengeReview,
   CameraChallengeStage,
   GameState,
   GameSession,
@@ -81,6 +83,7 @@ export const CameraChallengeArena: React.FC<CameraChallengeArenaProps> = ({
     [partnerId]: 0,
   });
   const [submissions, setSubmissions] = useState<Record<string, { submittedAt: number; ready: boolean }>>({});
+  const [reviews, setReviews] = useState<Record<string, CameraChallengeReview>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [performSecondsRemaining, setPerformSecondsRemaining] = useState(20);
@@ -120,6 +123,9 @@ export const CameraChallengeArena: React.FC<CameraChallengeArenaProps> = ({
         if (state.scores) setScores(state.scores);
         if (data.submissions) {
           setSubmissions(data.submissions as Record<string, { submittedAt: number; ready: boolean }>);
+        }
+        if (data.reviews) {
+          setReviews(data.reviews as Record<string, CameraChallengeReview>);
         }
         if (state.status === "game_end" || data.isGameEnd) {
           setIsGameEnd(true);
@@ -273,18 +279,71 @@ export const CameraChallengeArena: React.FC<CameraChallengeArenaProps> = ({
     }
   };
 
-  // 3b. Submit -> Result transition
-  const handleProceedToResult = useCallback(() => {
-    setStage("result");
-    setScores((prev) => ({
-      [myUserId]: (prev[myUserId] || 0) + 100,
-      [partnerId]: (prev[partnerId] || 0) + 100,
-    }));
+  // 3b. Submit -> Partner Review transition
+  const handleProceedToReview = useCallback(() => {
+    setStage("partner_review");
+  }, []);
+
+  // 3c. Partner Review Actions (Authoritative)
+  const handleApprovePartner = async (feedback?: string) => {
+    setIsSubmitting(true);
     cameraChallengeAudio.playCelebration();
-    if (currentRound >= maxRounds) {
-      setIsGameEnd(true);
+    try {
+      const res = await authoritativeGameClient.submitAction(
+        gameId,
+        "APPROVE_CHALLENGE",
+        { targetPlayerId: partnerId, feedback },
+        myUserId
+      );
+      if (res?.gameState) {
+        handleGameStateUpdate(res.gameState);
+      }
+    } catch {
+      // Local fallback in case of disconnected sandbox
+      setReviews((prev) => ({
+        ...prev,
+        [myUserId]: {
+          reviewerId: myUserId,
+          targetPlayerId: partnerId,
+          decision: "approve",
+          approved: true,
+          reviewedAt: Date.now(),
+        },
+      }));
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [myUserId, partnerId, currentRound, maxRounds]);
+  };
+
+  const handleRejectPartner = async (reason?: string) => {
+    setIsSubmitting(true);
+    cameraChallengeAudio.playSkip();
+    try {
+      const res = await authoritativeGameClient.submitAction(
+        gameId,
+        "REJECT_CHALLENGE",
+        { targetPlayerId: partnerId, reason },
+        myUserId
+      );
+      if (res?.gameState) {
+        handleGameStateUpdate(res.gameState);
+      }
+    } catch {
+      // Local fallback in case of disconnected sandbox
+      setReviews((prev) => ({
+        ...prev,
+        [myUserId]: {
+          reviewerId: myUserId,
+          targetPlayerId: partnerId,
+          decision: "reject",
+          approved: false,
+          reviewedAt: Date.now(),
+        },
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   // 4. Skip Challenge
   const handleSkip = async () => {
@@ -560,14 +619,27 @@ export const CameraChallengeArena: React.FC<CameraChallengeArenaProps> = ({
             />
           )}
 
-          {/* Explicit Submission Stage Overlay (challenge -> countdown -> perform -> submit -> result) */}
+          {/* Explicit Submission Stage Overlay */}
           {stage === "submit" && (
             <EventSubmitOverlay
               playerNames={playerNames}
               isP1Locked={Boolean(submissions["user_alex"]?.ready || submissions[myUserId]?.ready)}
               isP2Locked={Boolean(submissions["user_sam"]?.ready || submissions[partnerId]?.ready)}
-              onProceedToResult={handleProceedToResult}
+              onProceedToResult={handleProceedToReview}
               autoAdvanceSeconds={2.2}
+            />
+          )}
+
+          {/* Authoritative Partner Review Overlay */}
+          {stage === "partner_review" && (
+            <PartnerReviewOverlay
+              partnerName={myUserId === "user_alex" ? playerNames.p2 : playerNames.p1}
+              partnerId={partnerId}
+              myUserId={myUserId}
+              reviews={reviews}
+              isSubmitting={isSubmitting}
+              onApprove={handleApprovePartner}
+              onReject={handleRejectPartner}
             />
           )}
         </div>
@@ -673,11 +745,43 @@ export const CameraChallengeArena: React.FC<CameraChallengeArenaProps> = ({
                 id="manual-proceed-button"
                 variant="amber"
                 size="sm"
-                onClick={handleProceedToResult}
+                onClick={handleProceedToReview}
               >
-                <span>View Result</span>
+                <span>Proceed to Review</span>
                 <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </Button>
+            </div>
+          )}
+
+          {stage === "partner_review" && (
+            <div className="flex items-center space-x-2">
+              {!reviews[myUserId] ? (
+                <>
+                  <Button
+                    id="deck-reject-button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isSubmitting}
+                    onClick={() => handleRejectPartner()}
+                    className="border-rose-900/60 text-rose-300 hover:text-rose-100"
+                  >
+                    <span>Request Retry</span>
+                  </Button>
+                  <Button
+                    id="deck-approve-button"
+                    variant="amber"
+                    size="sm"
+                    disabled={isSubmitting}
+                    onClick={() => handleApprovePartner()}
+                  >
+                    <span>Approve Partner</span>
+                  </Button>
+                </>
+              ) : (
+                <div className="text-xs text-amber-300 font-medium animate-pulse">
+                  Awaiting partner verification...
+                </div>
+              )}
             </div>
           )}
 

@@ -307,6 +307,13 @@ describe("API Layer: Route Handlers Verification", () => {
       expect(json.session.gameType).toBe("find_it_first");
       expect(json.session.playerIds).toContain("user_a");
       expect(json.state).toBeDefined();
+      expect(json.state.status).toBe("ready");
+      // Security assertion: pre-game ready state MUST NOT expose secret target information
+      expect(json.state.data.targetId).toBeUndefined();
+      expect(json.state.data.targetName).toBeUndefined();
+      expect(json.state.data.targetCode).toBeUndefined();
+      expect(json.state.data.targetAnswer).toBeUndefined();
+      expect(json.state.data.usedTargetIds).toBeUndefined();
     });
 
     it("fetches active session using GET /api/games/session?gameId=...", async () => {

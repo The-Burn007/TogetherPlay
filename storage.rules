@@ -37,14 +37,44 @@ service firebase.storage {
       allow delete: if signedIn() && request.auth.uid == uid;
     }
 
+    // Ownership-aware memory media path: couples/{coupleId}/memories/{creatorUid}/{fileName}
+    match /couples/{coupleId}/memories/{creatorUid}/{fileName} {
+      // 1. Read: Allowed strictly to verified members of this couple
+      allow read: if isCoupleMember(coupleId);
+
+      // 2. Create: Only the designated creatorUid can upload to their memory path
+      // Strictly enforces: couple membership, creatorUid match, file size <= 15MB,
+      // safe raster image MIME types (SVG blocked against stored XSS), and no path traversal ('..')
+      allow create: if isCoupleMember(coupleId)
+        && request.auth.uid == creatorUid
+        && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)')
+        && fileName.size() <= 128
+        && !fileName.matches('.*\\.\\..*');
+
+      // 3. Update: Strictly forbidden to prevent replacing/hijacking another member's original media object
+      allow update: if false;
+
+      // 4. Delete: Strictly unauthorized unless requested by the original creatorUid who uploaded the asset
+      allow delete: if isCoupleMember(coupleId)
+        && request.auth.uid == creatorUid;
+    }
+
+    // Top-level couple memory media path (legacy/fallback): couples/{coupleId}/memories/{fileName}
     match /couples/{coupleId}/memories/{fileName} {
       allow read: if isCoupleMember(coupleId);
 
-      // Require authentication and couple membership; enforce 15MB limit and safe MIME types
-      allow create, update: if isCoupleMember(coupleId)
+      // Create: Couple members can upload; overwriting existing assets is strictly forbidden
+      allow create: if isCoupleMember(coupleId)
         && request.resource.size < 15 * 1024 * 1024
-        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+        && request.resource.contentType.matches('image/(jpeg|png|webp)')
+        && fileName.size() <= 128
+        && !fileName.matches('.*\\.\\..*');
 
+      // Overwriting existing media objects is forbidden
+      allow update: if false;
+
+      // Delete: Allowed to couple members
       allow delete: if isCoupleMember(coupleId);
     }
 

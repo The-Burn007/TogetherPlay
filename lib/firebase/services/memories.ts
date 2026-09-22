@@ -4,6 +4,7 @@ import {
   getDocs,
   setDoc,
   deleteDoc,
+  updateDoc,
   query,
   orderBy,
   onSnapshot,
@@ -16,7 +17,7 @@ import {
 } from "firebase/storage";
 import { db, storage } from "../client";
 import { handleFirestoreError, OperationType } from "../errors";
-import type { CoupleMemory, CreateMemoryPayload } from "@/lib/memories/types";
+import type { CoupleMemory, CreateMemoryPayload, UpdateMemoryPayload } from "@/lib/memories/types";
 import { getDefaultCoupleMemories } from "@/lib/memories/defaultMemories";
 
 export class MemoryService {
@@ -150,7 +151,8 @@ export class MemoryService {
       const ext = originalName.split(".").pop() || "jpg";
       const sanitizedExt = ext.replace(/[^a-zA-Z0-9]/g, "").slice(0, 4) || "jpg";
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${sanitizedExt}`;
-      const storagePath = `couples/${coupleId}/memories/${fileName}`;
+      // Ownership-aware storage path: couples/{coupleId}/memories/{authorUid}/{fileName}
+      const storagePath = `couples/${coupleId}/memories/${authorUid}/${fileName}`;
 
       try {
         const storageReference = ref(storage, storagePath);
@@ -182,6 +184,7 @@ export class MemoryService {
         fileName,
         contentType,
         fileSize: mediaFile.size,
+        caption: payload.caption ? payload.caption.trim() : undefined,
         ephemeralUrl,
       };
     }
@@ -195,6 +198,9 @@ export class MemoryService {
       dateLabel: payload.dateLabel || this.formatDateLabel(payload.date || now),
       context: payload.context.trim(),
       note: payload.note ? payload.note.trim() : undefined,
+      caption: payload.caption ? payload.caption.trim() : undefined,
+      reactions: payload.reactions || {},
+      visibility: payload.visibility || "couple",
       gameActivity: payload.gameActivity,
       media: mediaData,
       milestoneData: payload.milestoneData,
@@ -217,10 +223,60 @@ export class MemoryService {
   }
 
   /**
-   * Deletes a memory document and associated storage file.
+   * Updates controlled metadata on a memory:
+   * caption, reactions, visibility, note, title, context.
+   * Enforces immutability: memoryId, coupleId, createdBy, createdAt,
+   * and original media storage reference cannot be altered.
    */
-  async deleteMemory(coupleId: string, memoryId: string, storagePath?: string): Promise<void> {
-    // 1. Delete media asset from Storage if exists
+  async updateMemory(
+    coupleId: string,
+    memoryId: string,
+    authorUid: string,
+    updates: UpdateMemoryPayload
+  ): Promise<void> {
+    const memoryRef = doc(db, "couples", coupleId, "memories", memoryId);
+
+    const updatePayload: Record<string, any> = {
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (updates.caption !== undefined) updatePayload.caption = updates.caption;
+    if (updates.reactions !== undefined) updatePayload.reactions = updates.reactions;
+    if (updates.reaction !== undefined) {
+      updatePayload[`reactions.${authorUid}`] = updates.reaction;
+    }
+    if (updates.visibility !== undefined) updatePayload.visibility = updates.visibility;
+    if (updates.note !== undefined) updatePayload.note = updates.note;
+    if (updates.title !== undefined) updatePayload.title = updates.title;
+    if (updates.context !== undefined) updatePayload.context = updates.context;
+    if (updates.dateLabel !== undefined) updatePayload.dateLabel = updates.dateLabel;
+
+    try {
+      await updateDoc(memoryRef, updatePayload);
+    } catch (firestoreErr) {
+      console.warn("Firestore memory update failed, saving to local session:", firestoreErr);
+      this.updateInLocalFallback(coupleId, memoryId, updatePayload);
+      handleFirestoreError(firestoreErr, OperationType.UPDATE, `couples/${coupleId}/memories/${memoryId}`);
+    }
+  }
+
+  /**
+   * Deletes a memory document and associated storage file.
+   * Enforces that only the author who recorded the memory can delete it.
+   */
+  async deleteMemory(
+    coupleId: string,
+    memoryId: string,
+    storagePath?: string,
+    creatorUid?: string,
+    currentUid?: string
+  ): Promise<void> {
+    // 1. Client-side ownership enforcement
+    if (creatorUid && currentUid && creatorUid !== currentUid) {
+      throw new Error("Unauthorized delete: only the creator can delete this memory.");
+    }
+
+    // 2. Delete media asset from Storage if exists
     if (storagePath) {
       try {
         const storageReference = ref(storage, storagePath);
@@ -241,7 +297,7 @@ export class MemoryService {
       }
     }
 
-    // 2. Delete Firestore document
+    // 3. Delete Firestore document
     try {
       const memoryRef = doc(db, "couples", coupleId, "memories", memoryId);
       await deleteDoc(memoryRef);
@@ -322,6 +378,17 @@ export class MemoryService {
     try {
       const current = this.getLocalFallbackMemories(coupleId);
       const updated = [memory, ...current.filter((m) => m.id !== memory.id)];
+      localStorage.setItem(`togetherplay_memories_${coupleId}`, JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+  }
+
+  private updateInLocalFallback(coupleId: string, memoryId: string, updates: Record<string, any>): void {
+    if (typeof window === "undefined") return;
+    try {
+      const current = this.getLocalFallbackMemories(coupleId);
+      const updated = current.map((m) => (m.id === memoryId ? { ...m, ...updates } : m));
       localStorage.setItem(`togetherplay_memories_${coupleId}`, JSON.stringify(updated));
     } catch {
       // ignore

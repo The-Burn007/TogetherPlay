@@ -211,7 +211,7 @@ export const CountdownView: React.FC<CountdownViewProps> = ({ countdownNumber })
 // 3. TARGET REVEAL CARD
 // ==========================================
 export interface TargetRevealProps {
-  targetId: string;
+  targetId?: string;
   targetName?: string;
   targetCode?: string;
   targetClue?: string;
@@ -229,11 +229,11 @@ export const TargetRevealCard: React.FC<TargetRevealProps> = ({
   maxRounds,
   remainingSeconds,
 }) => {
-  const meta = getArtifactMeta(targetId);
-  const Icon = meta.icon;
-  const displayName = targetName || meta.name;
-  const displayCode = targetCode || meta.code;
-  const displayClue = targetClue || meta.clue;
+  const meta = targetId ? getArtifactMeta(targetId) : null;
+  const Icon = meta ? meta.icon : Sparkles;
+  const displayName = targetName || (meta ? meta.name : "Mystery Relic");
+  const displayCode = targetCode || (meta ? meta.code : `#${round.toString().padStart(2, "0")}`);
+  const displayClue = targetClue || (meta ? meta.clue : "Inspect the antique artifacts on the board to find the match.");
 
   return (
     <motion.div
@@ -303,7 +303,7 @@ export interface RoundResultOverlayProps {
   winnerPlayerId: string | null;
   pointsAwarded: number;
   speedBonus: number;
-  targetName: string;
+  targetName?: string;
   onNextRound: () => void;
   isLastRound: boolean;
 }
@@ -313,7 +313,7 @@ export const RoundResultOverlay: React.FC<RoundResultOverlayProps> = ({
   winnerPlayerId,
   pointsAwarded,
   speedBonus,
-  targetName,
+  targetName = "Target Artifact",
   onNextRound,
   isLastRound,
 }) => {

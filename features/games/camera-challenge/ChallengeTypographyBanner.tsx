@@ -9,7 +9,7 @@ interface ChallengeTypographyBannerProps {
   prompt: CameraChallengePrompt;
   currentRound: number;
   maxRounds: number;
-  stage: "challenge" | "countdown" | "perform" | "submit" | "result";
+  stage: "challenge" | "countdown" | "perform" | "submit" | "partner_review" | "result";
 }
 
 const CATEGORY_META = {
@@ -58,6 +58,7 @@ export const ChallengeTypographyBanner: React.FC<ChallengeTypographyBannerProps>
     { key: "countdown", label: "Countdown" },
     { key: "perform", label: "Perform" },
     { key: "submit", label: "Submit" },
+    { key: "partner_review", label: "Review" },
     { key: "result", label: "Result" },
   ];
 

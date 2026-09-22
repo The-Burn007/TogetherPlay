@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { presenceService } from "@/lib/firebase/services/presence";
+import { coupleService } from "@/lib/firebase/services/couple";
 import {
   type PresenceState,
   type ConnectionStatus,
@@ -34,25 +35,61 @@ export function usePresence(): UsePresenceReturn {
   const myUserId = user?.uid || "user_alex";
   const myDisplayName = user?.displayName || (myUserId === "user_sam" ? "Sam" : "Alex");
   const myCity = myUserId === "user_sam" ? "Tokyo" : "London";
-  const partnerUserId = myUserId === "user_sam" ? "user_alex" : "user_sam";
+  const defaultPartnerId = myUserId === "user_sam" ? "user_alex" : "user_sam";
   const partnerDefaultName = myUserId === "user_sam" ? "Alex" : "Sam";
   const partnerDefaultCity = myUserId === "user_sam" ? "London" : "Tokyo";
+
+  const [partnerUserId, setPartnerUserId] = useState<string>(defaultPartnerId);
+  const [coupleId, setCoupleId] = useState<string | null>(null);
+
+  // Dynamically resolve partner from couple membership if authenticated
+  useEffect(() => {
+    if (!user?.uid) {
+      setPartnerUserId(defaultPartnerId);
+      return;
+    }
+
+    if (user.uid === "user_sam" || user.uid === "user_alex") {
+      setCoupleId("cpl_tokyo_london_4209");
+      setPartnerUserId(user.uid === "user_sam" ? "user_alex" : "user_sam");
+      return;
+    }
+
+    let isMounted = true;
+    coupleService
+      .getUserCouple(user.uid)
+      .then((couple) => {
+        if (!isMounted || !couple) return;
+        setCoupleId(couple.coupleId);
+        const partner = couple.memberIds?.find((id) => id !== user.uid);
+        if (partner) {
+          setPartnerUserId(partner);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.uid, defaultPartnerId]);
 
   const [partnerPresence, setPartnerPresence] = useState<UserPresenceRecord | null>(null);
   const [myPresence, setMyPresence] = useState<UserPresenceRecord | null>(null);
 
-  // Initialize lifecycle for self
+  // Initialize lifecycle for self with couple/partner scope
   useEffect(() => {
     const cleanup = presenceService.initializePresenceLifecycle(myUserId, {
       displayName: myDisplayName,
       city: myCity,
       colorRole: myUserId === "user_sam" ? "sage" : "ember",
+      partnerId: partnerUserId,
+      coupleId: coupleId || undefined,
     });
 
     return () => {
       cleanup();
     };
-  }, [myUserId, myDisplayName, myCity]);
+  }, [myUserId, myDisplayName, myCity, partnerUserId, coupleId]);
 
   // Subscribe to partner presence
   useEffect(() => {
@@ -78,14 +115,14 @@ export function usePresence(): UsePresenceReturn {
 
   const setMyState = useCallback(
     async (state: PresenceState, activity?: string, gameId?: string) => {
-      await presenceService.setPresenceState(myUserId, state, activity, gameId);
+      await presenceService.setPresenceState(myUserId, state, activity, gameId, partnerUserId);
     },
-    [myUserId]
+    [myUserId, partnerUserId]
   );
 
   const setSimulatedPartnerState = useCallback(
     async (state: PresenceState) => {
-      await presenceService.setPresenceState(partnerUserId, state, `Simulated as ${state}`);
+      presenceService.setLocalSimulatedPartnerPresence(partnerUserId, state);
     },
     [partnerUserId]
   );

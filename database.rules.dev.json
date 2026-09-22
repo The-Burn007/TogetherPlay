@@ -8,9 +8,9 @@
     },
     "presence": {
       "$uid": {
-        ".read": "auth != null",
+        ".read": "auth != null && (auth.uid === $uid || data.child('partnerId').val() === auth.uid || data.child('authorizedUsers').hasChild(auth.uid) || (data.child('coupleId').exists() && root.child('couples').child(data.child('coupleId').val()).child('memberIds').hasChild(auth.uid)))",
         ".write": "auth != null && auth.uid === $uid",
-        ".validate": "!newData.hasChildren(['lat', 'lng', 'latitude', 'longitude', 'location', 'gps', 'coordinates'])"
+        ".validate": "(!newData.hasChild('userId') || (newData.child('userId').isString() && newData.child('userId').val() === $uid)) && (!newData.hasChild('partnerId') || (newData.child('partnerId').isString() && newData.child('partnerId').val() !== $uid && newData.child('partnerId').val().length <= 128)) && (!newData.hasChild('authorizedUsers') || newData.child('authorizedUsers').hasChild($uid)) && (!newData.hasChild('lastSeenMs') || newData.child('lastSeenMs').val() === now) && !newData.hasChildren(['lat', 'lng', 'latitude', 'longitude', 'location', 'gps', 'coordinates'])"
       }
     },
     "notifications": {
@@ -22,7 +22,37 @@
     "webrtc_signaling": {
       "$roomId": {
         ".read": "auth != null",
-        ".write": "auth != null"
+        "participants": {
+          "$userId": {
+            ".read": "auth != null",
+            ".write": "auth != null && auth.uid === $userId",
+            ".validate": "!newData.exists() || (newData.hasChildren(['userId', 'joinedAt']) && newData.child('userId').val() === $userId && newData.child('userId').val().length <= 128)"
+          }
+        },
+        "offers": {
+          "$toUserId": {
+            ".read": "auth != null && (auth.uid === $toUserId || data.child('fromUserId').val() === auth.uid)",
+            ".write": "auth != null && (!newData.exists() ? (data.child('fromUserId').val() === auth.uid || auth.uid === $toUserId) : (newData.child('fromUserId').val() === auth.uid && auth.uid !== $toUserId))",
+            ".validate": "!newData.exists() || (newData.hasChildren(['fromUserId', 'toUserId']) && newData.child('toUserId').val() === $toUserId && newData.child('fromUserId').val() === auth.uid && ((newData.child('sdp').isString() && newData.child('sdp').val().length <= 32768) || (newData.child('sdp/sdp').isString() && newData.child('sdp/sdp').val().length <= 32768)))"
+          }
+        },
+        "answers": {
+          "$toUserId": {
+            ".read": "auth != null && (auth.uid === $toUserId || data.child('fromUserId').val() === auth.uid)",
+            ".write": "auth != null && (!newData.exists() ? (data.child('fromUserId').val() === auth.uid || auth.uid === $toUserId) : (newData.child('fromUserId').val() === auth.uid && auth.uid !== $toUserId))",
+            ".validate": "!newData.exists() || (newData.hasChildren(['fromUserId', 'toUserId']) && newData.child('toUserId').val() === $toUserId && newData.child('fromUserId').val() === auth.uid && ((newData.child('sdp').isString() && newData.child('sdp').val().length <= 32768) || (newData.child('sdp/sdp').isString() && newData.child('sdp/sdp').val().length <= 32768)))"
+          }
+        },
+        "candidates": {
+          "$toUserId": {
+            ".read": "auth != null && (auth.uid === $toUserId || data.child('fromUserId').val() === auth.uid)",
+            ".write": "auth != null",
+            "$candidateId": {
+              ".write": "auth != null && (!newData.exists() || (newData.child('fromUserId').val() === auth.uid && auth.uid !== $toUserId))",
+              ".validate": "!newData.exists() || (newData.hasChildren(['fromUserId', 'toUserId']) && newData.child('toUserId').val() === $toUserId && newData.child('fromUserId').val() === auth.uid && ((newData.child('candidate').isString() && newData.child('candidate').val().length <= 2048) || (newData.child('candidate/candidate').isString() && newData.child('candidate/candidate').val().length <= 2048)))"
+            }
+          }
+        }
       }
     },
     ".read": false,

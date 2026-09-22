@@ -18,41 +18,32 @@
  * 8. action has not already been processed
  */
 
-import type { GameAction, GameState, GameSession, GameResult, ProcessedActionRecord } from "@/types/domain";
+import type {
+  GameAction,
+  GameState,
+  PublicGameState,
+  GameSession,
+  GameResult,
+  ProcessedActionRecord,
+  PrivateGameState,
+} from "@/types/domain";
 import { verifyAppCheckToken, validateActionPayloadStructure } from "./security";
-import { serverGameRepository, type GameRepositoryContract, PersistenceError } from "./gameRepository";
+import {
+  serverGameRepository,
+  type GameRepositoryContract,
+  PersistenceError,
+  computePayloadFingerprint,
+  MAX_BOUNDED_PROCESSED_ACTIONS,
+} from "./gameRepository";
 import { AuthoritativeGameEngine } from "./authoritativeGameEngine";
+import { ActionValidationError, type ActionErrorCode } from "./errors";
+import { getPublicState } from "@/lib/games/gameStateContract";
 
 if (typeof window !== "undefined") {
   throw new Error("Security Violation: submitGameAction cannot be loaded in client browser bundle.");
 }
 
-export type ActionErrorCode =
-  | "UNAUTHENTICATED"
-  | "APP_CHECK_INVALID"
-  | "GAME_NOT_FOUND"
-  | "PLAYER_NOT_IN_GAME"
-  | "PLAYER_IMPERSONATION"
-  | "GAME_NOT_ACTIVE"
-  | "INVALID_ACTION"
-  | "INVALID_ACTION_TYPE"
-  | "ACTION_DISALLOWED_FOR_STATE"
-  | "NOT_PLAYER_TURN"
-  | "STALE_VERSION"
-  | "ACTION_ID_REUSED_CROSS_GAME"
-  | "PERSISTENCE_ERROR"
-  | "INTERNAL_ERROR";
-
-export class ActionValidationError extends Error {
-  constructor(
-    public code: ActionErrorCode,
-    message: string,
-    public statusCode: number = 400
-  ) {
-    super(message);
-    this.name = "ActionValidationError";
-  }
-}
+export { ActionValidationError, type ActionErrorCode };
 
 export interface SubmitActionServerContext {
   auth?: { uid: string; email?: string } | null;
@@ -71,7 +62,7 @@ export interface SubmitActionResult {
   serverTimestamp: number;
   eventType: string;
   stateVersion: number;
-  gameState: GameState;
+  gameState: PublicGameState;
   gameSession: GameSession;
   gameResult?: GameResult | null;
   payload?: Record<string, unknown>;
@@ -205,13 +196,19 @@ export async function submitGameAction(
     action.clientActionId,
     action.gameId,
     playerId,
-    serverTimestamp
+    serverTimestamp,
+    action.type,
+    action.payload
   );
   if (!claimCheck.allowed) {
+    const errCode = claimCheck.error || "ACTION_ID_REUSED_CROSS_GAME";
+    const statusCode =
+      errCode === "INVALID_ACTION" || errCode === "INVALID_ACTION_PAYLOAD" ? 400 : 403;
     throw new ActionValidationError(
-      "ACTION_ID_REUSED_CROSS_GAME",
-      `Security violation: Action ID '${action.clientActionId}' is already associated with game '${claimCheck.existingGameId}' and cannot be reused in game '${action.gameId}'.`,
-      403
+      errCode,
+      claimCheck.errorMessage ||
+        `Security violation: Action ID '${action.clientActionId}' cannot be processed.`,
+      statusCode
     );
   }
 
@@ -225,7 +222,11 @@ export async function submitGameAction(
     gameResult: GameResult | null | undefined;
     authoritativePayload?: Record<string, unknown>;
     cachedActionRecord?: ProcessedActionRecord;
+    updatedPrivateState?: PrivateGameState | null;
   }
+
+  const initialPrivateState = await repo.getPrivateGameState(session.gameId);
+  let latestPrivateState = initialPrivateState;
 
   const txOutcome = await repo.transactEphemeralGameState<TransactionExecutionMeta>(
     action.gameId,
@@ -258,8 +259,58 @@ export async function submitGameAction(
       // 2. Verify action has not already been processed (Idempotency Protection)
       // If client retries an action, do not double-mutate state or re-validate conditions
       // altered by this action itself.
-      if (state.processedActionIds && state.processedActionIds[action.clientActionId]) {
-        const cached = state.processedActions?.[action.clientActionId];
+      const incomingFingerprint = computePayloadFingerprint(action.payload);
+      const isDuplicateInState = Boolean(state.processedActionIds && state.processedActionIds[action.clientActionId]);
+      const isDuplicateInDurableClaims = Boolean(claimCheck.isCompleted && claimCheck.cachedRecord);
+
+      if (isDuplicateInState || isDuplicateInDurableClaims) {
+        const cachedStateRecord = state.processedActions?.[action.clientActionId];
+        const cachedClaimRecord = claimCheck.cachedRecord;
+
+        const cachedPlayerId = cachedStateRecord?.playerId || cachedClaimRecord?.playerId;
+        const cachedType = cachedStateRecord?.type || cachedClaimRecord?.type;
+        const cachedFingerprint =
+          cachedStateRecord?.requestPayloadFingerprint || cachedClaimRecord?.payloadHash;
+
+        // 1. Verify player matches
+        if (cachedPlayerId && cachedPlayerId !== playerId) {
+          return {
+            abortError: new ActionValidationError(
+              "ACTION_ID_REUSED_BY_OTHER_PLAYER",
+              `Security violation: Action ID '${action.clientActionId}' was claimed by player '${cachedPlayerId}' and cannot be reused by '${playerId}'.`,
+              403
+            ),
+          };
+        }
+
+        // 2. Verify action type matches
+        if (cachedType && cachedType !== action.type) {
+          return {
+            abortError: new ActionValidationError(
+              "INVALID_ACTION",
+              `Action ID '${action.clientActionId}' was submitted as type '${cachedType}' and cannot be reused as '${action.type}'.`,
+              400
+            ),
+          };
+        }
+
+        // 3. Verify payload matches
+        if (cachedFingerprint && incomingFingerprint && cachedFingerprint !== incomingFingerprint) {
+          return {
+            abortError: new ActionValidationError(
+              "INVALID_ACTION_PAYLOAD",
+              `Action ID '${action.clientActionId}' was previously submitted with a different payload.`,
+              400
+            ),
+          };
+        }
+
+        const cachedPayload = cachedStateRecord?.payload ?? cachedClaimRecord?.resultPayload;
+        const originalTs =
+          state.processedActionIds?.[action.clientActionId] ??
+          cachedClaimRecord?.timestamp ??
+          serverTimestamp;
+
         return {
           nextState: state,
           meta: {
@@ -267,11 +318,20 @@ export async function submitGameAction(
             updatedSession: session,
             updatedState: state,
             gameResult: null,
-            authoritativePayload: (cached?.payload as Record<string, unknown>) ?? {
+            authoritativePayload: (cachedPayload as Record<string, unknown>) ?? {
               idempotent: true,
-              originalProcessedAtServer: state.processedActionIds[action.clientActionId],
+              originalProcessedAtServer: originalTs,
             },
-            cachedActionRecord: cached,
+            cachedActionRecord: cachedStateRecord || (cachedClaimRecord ? {
+              clientActionId: action.clientActionId,
+              type: cachedClaimRecord.type || action.type,
+              playerId: cachedClaimRecord.playerId,
+              gameId: cachedClaimRecord.gameId,
+              serverTimestamp: cachedClaimRecord.timestamp,
+              stateVersion: cachedClaimRecord.stateVersion || state.version,
+              payload: cachedClaimRecord.resultPayload,
+              requestPayloadFingerprint: cachedClaimRecord.payloadHash,
+            } : undefined),
           },
         };
       }
@@ -365,8 +425,12 @@ export async function submitGameAction(
         state,
         action,
         playerId,
-        serverTimestamp
+        serverTimestamp,
+        latestPrivateState
       );
+      if (execution.updatedPrivateState) {
+        latestPrivateState = execution.updatedPrivateState;
+      }
 
       // 8. Update version
       const nextVersion = Math.max((state.version || 0) + 1, execution.updatedState.version);
@@ -381,6 +445,7 @@ export async function submitGameAction(
         serverTimestamp,
         stateVersion: nextVersion,
         payload: execution.authoritativePayload,
+        requestPayloadFingerprint: incomingFingerprint,
       };
 
       const updatedProcessedActionIds = {
@@ -388,14 +453,29 @@ export async function submitGameAction(
         ...(execution.updatedState.processedActionIds || {}),
         [action.clientActionId]: serverTimestamp,
       };
-      execution.updatedState.processedActionIds = updatedProcessedActionIds;
 
       const updatedProcessedActions = {
         ...(state.processedActions || {}),
         ...(execution.updatedState.processedActions || {}),
         [action.clientActionId]: actionRecord,
       };
-      execution.updatedState.processedActions = updatedProcessedActions;
+
+      // Bound processed action collections to MAX_BOUNDED_PROCESSED_ACTIONS to keep live state lean
+      const sortedActionIds = Object.keys(updatedProcessedActionIds).sort(
+        (a, b) => (updatedProcessedActionIds[b] || 0) - (updatedProcessedActionIds[a] || 0)
+      );
+      const boundedActionIds: Record<string, number> = {};
+      const boundedActions: Record<string, ProcessedActionRecord> = {};
+
+      for (const id of sortedActionIds.slice(0, MAX_BOUNDED_PROCESSED_ACTIONS)) {
+        boundedActionIds[id] = updatedProcessedActionIds[id];
+        if (updatedProcessedActions[id]) {
+          boundedActions[id] = updatedProcessedActions[id];
+        }
+      }
+
+      execution.updatedState.processedActionIds = boundedActionIds;
+      execution.updatedState.processedActions = boundedActions;
 
       execution.updatedState.lastProcessedAction = {
         clientActionId: action.clientActionId,
@@ -405,15 +485,22 @@ export async function submitGameAction(
       };
       execution.updatedState.serverTimestamp = serverTimestamp;
 
-      // 10. Write the resulting state
+      // 10. Guarantee nextState is strictly sanitized PublicGameState
+      const sanitizedNextState = getPublicState({
+        state: execution.updatedState,
+        privateState: latestPrivateState,
+      });
+
+      // 11. Write the resulting state
       return {
-        nextState: execution.updatedState,
+        nextState: sanitizedNextState,
         meta: {
           isIdempotentDuplicate: false,
           updatedSession: execution.updatedSession,
-          updatedState: execution.updatedState,
+          updatedState: sanitizedNextState,
           gameResult: execution.gameResult,
           authoritativePayload: execution.authoritativePayload,
+          updatedPrivateState: execution.updatedPrivateState,
         },
       };
     }
@@ -461,7 +548,10 @@ export async function submitGameAction(
       gameResult: existingResult,
       payload: (txOutcome.meta.authoritativePayload as Record<string, unknown>) || {
         idempotent: true,
-        originalProcessedAtServer: committedState.processedActionIds[action.clientActionId],
+        originalProcessedAtServer:
+          committedState.processedActionIds?.[action.clientActionId] ??
+          cached?.serverTimestamp ??
+          serverTimestamp,
       },
     };
   }
@@ -471,10 +561,25 @@ export async function submitGameAction(
     await repo.saveGameSession(txOutcome.meta.updatedSession);
   }
 
+  // Persist private state to isolated secure storage
+  if (txOutcome.meta?.updatedPrivateState) {
+    await repo.savePrivateGameState(session.gameId, txOutcome.meta.updatedPrivateState);
+  }
+
   // Persist durable gameResult to Firestore
   if (txOutcome.meta?.gameResult) {
     await repo.saveGameResult(txOutcome.meta.gameResult);
   }
+
+  // Mark durable action claim as completed with authoritative outcome
+  await repo.completeActionClaim(
+    action.clientActionId,
+    session.gameId,
+    playerId,
+    committedState.version,
+    txOutcome.meta?.authoritativePayload,
+    serverTimestamp
+  );
 
   return {
     accepted: true,
@@ -607,14 +712,149 @@ function validateActionStateAllowed(
       if (currentStatus !== "round_end" && currentStatus !== "playing") {
         throw new ActionValidationError(
           "ACTION_DISALLOWED_FOR_STATE",
-          `Action 'NEXT_ROUND' is only allowed after a round ends, but current status is '${currentStatus}'.`,
+          `Action 'NEXT_ROUND' is only allowed during active gameplay or after a round ends, but current status is '${currentStatus}'.`,
+          400
+        );
+      }
+
+      if (session.gameType === "couple_race") {
+        throw new ActionValidationError(
+          "ACTION_DISALLOWED_FOR_STATE",
+          "Action 'NEXT_ROUND' is not supported for turn-based game 'couple_race'. Use 'END_TURN' to advance turns.",
+          400
+        );
+      }
+
+      // Check turn player if the game defines a specific turn player
+      if (state.turnPlayerId && state.turnPlayerId !== playerId) {
+        throw new ActionValidationError(
+          "NOT_PLAYER_TURN",
+          `Action 'NEXT_ROUND' cannot be executed: it is player '${state.turnPlayerId}'s turn, not '${playerId}'.`,
+          400
+        );
+      }
+
+      // Authoritative State Machine Invariant:
+      // A round may advance ONLY when:
+      // 1. The round has been legitimately resolved on the server, OR
+      // 2. The authoritative server deadline has expired.
+      // Do NOT allow a client action alone to declare the round resolved.
+      let isRoundResolved = false;
+      if (currentStatus === "round_end") {
+        isRoundResolved = true;
+      } else if (session.gameType === "find_it_first") {
+        isRoundResolved =
+          state.data?.roundWinnerId != null ||
+          state.data?.roundWinningCell != null ||
+          state.data?.roundStage === "round_result";
+      } else if (session.gameType === "speed_duel") {
+        isRoundResolved =
+          state.data?.roundStage === "round_result" ||
+          state.data?.roundWinnerId != null ||
+          state.data?.falseStartPlayerId != null;
+      } else if (session.gameType === "camera_challenge") {
+        isRoundResolved =
+          state.data?.stage === "result" ||
+          state.data?.isGameEnd === true;
+      } else {
+        isRoundResolved = state.data?.roundWinnerId != null;
+      }
+
+      const isDeadlineExpired =
+        (typeof state.roundDeadlineServer === "number" &&
+          state.roundDeadlineServer > 0 &&
+          serverTimestamp >= state.roundDeadlineServer) ||
+        (typeof state.data?.stageDeadlineServer === "number" &&
+          state.data.stageDeadlineServer > 0 &&
+          serverTimestamp >= state.data.stageDeadlineServer);
+
+      if (!isRoundResolved && !isDeadlineExpired) {
+        throw new ActionValidationError(
+          "ACTION_DISALLOWED_FOR_STATE",
+          `Cannot advance round: active round in '${session.gameType}' has not been resolved and server deadline has not expired.`,
           400
         );
       }
       break;
     }
 
-    case "SUBMIT_CAMERA_CHALLENGE":
+    case "SUBMIT_CAMERA_CHALLENGE": {
+      if (currentStatus !== "playing") {
+        throw new ActionValidationError(
+          "ACTION_DISALLOWED_FOR_STATE",
+          `Camera challenge action 'SUBMIT_CAMERA_CHALLENGE' is only allowed during active gameplay, but current status is '${currentStatus}'.`,
+          400
+        );
+      }
+
+      // Check expired challenge
+      const isExpired =
+        (typeof state.data?.stageDeadlineServer === "number" &&
+          state.data.stageDeadlineServer > 0 &&
+          serverTimestamp > state.data.stageDeadlineServer) ||
+        (typeof state.roundDeadlineServer === "number" &&
+          state.roundDeadlineServer > 0 &&
+          serverTimestamp > state.roundDeadlineServer);
+      if (isExpired) {
+        throw new ActionValidationError(
+          "ACTION_DISALLOWED_FOR_STATE",
+          "Cannot submit camera challenge: challenge deadline has expired on the server.",
+          400
+        );
+      }
+      break;
+    }
+
+    case "APPROVE_CHALLENGE":
+    case "REJECT_CHALLENGE":
+    case "REVIEW_CHALLENGE": {
+      if (currentStatus !== "playing" && currentStatus !== "round_end") {
+        throw new ActionValidationError(
+          "ACTION_DISALLOWED_FOR_STATE",
+          `Camera challenge action '${action.type}' is only allowed during active gameplay or review, but current status is '${currentStatus}'.`,
+          400
+        );
+      }
+
+      // Check self-approval guard: Client cannot approve its own submission
+      const rawPayload = (action.payload && typeof action.payload === "object" ? action.payload : {}) as Record<string, unknown>;
+      const targetPlayerId = String(
+        rawPayload.targetPlayerId ||
+        session.playerIds.find((pid) => pid !== playerId) ||
+        ""
+      );
+
+      if (!targetPlayerId || targetPlayerId === playerId) {
+        throw new ActionValidationError(
+          "UNAUTHORIZED_ACTION",
+          "Client cannot approve or review its own submission. Only the partner may review.",
+          403
+        );
+      }
+
+      if (!session.playerIds.includes(targetPlayerId)) {
+        throw new ActionValidationError(
+          "INVALID_ACTION_PAYLOAD",
+          `Target player '${targetPlayerId}' is not a participant in this game session.`,
+          400
+        );
+      }
+
+      // Expired challenge review check
+      const isReviewExpired =
+        typeof state.data?.stageDeadlineServer === "number" &&
+        state.data.stageDeadlineServer > 0 &&
+        serverTimestamp > state.data.stageDeadlineServer;
+      if (isReviewExpired) {
+        throw new ActionValidationError(
+          "ACTION_DISALLOWED_FOR_STATE",
+          "Cannot submit review: partner review deadline has expired on the server.",
+          400
+        );
+      }
+      break;
+    }
+
     case "START_COUNTDOWN":
     case "START_PERFORM":
     case "SKIP_CHALLENGE": {
@@ -633,6 +873,35 @@ function validateActionStateAllowed(
         throw new ActionValidationError(
           "ACTION_DISALLOWED_FOR_STATE",
           `Action 'NEXT_CHALLENGE' is only allowed after a challenge completes, but current status is '${currentStatus}'.`,
+          400
+        );
+      }
+
+      if (state.turnPlayerId && state.turnPlayerId !== playerId) {
+        throw new ActionValidationError(
+          "NOT_PLAYER_TURN",
+          `Action 'NEXT_CHALLENGE' cannot be executed: it is player '${state.turnPlayerId}'s turn, not '${playerId}'.`,
+          400
+        );
+      }
+
+      const isResolved =
+        currentStatus === "round_end" ||
+        state.data?.stage === "result" ||
+        state.data?.isGameEnd === true;
+
+      const isDeadlineExpired =
+        (typeof state.data?.stageDeadlineServer === "number" &&
+          state.data.stageDeadlineServer > 0 &&
+          serverTimestamp >= state.data.stageDeadlineServer) ||
+        (typeof state.roundDeadlineServer === "number" &&
+          state.roundDeadlineServer > 0 &&
+          serverTimestamp >= state.roundDeadlineServer);
+
+      if (!isResolved && !isDeadlineExpired) {
+        throw new ActionValidationError(
+          "ACTION_DISALLOWED_FOR_STATE",
+          `Cannot advance challenge: active Camera Challenge has not been resolved and deadline has not expired.`,
           400
         );
       }

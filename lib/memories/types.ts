@@ -63,6 +63,9 @@ export interface CoupleMemory {
   dateLabel: string; // Human-friendly label: "Yesterday · 23:18 GMT" or "Oct 12, 2026"
   context: string; // Intimate relationship context: backstory, location, or atmosphere
   note?: string; // Optional detailed reflections, letters, whispers
+  caption?: string; // Controlled visual caption
+  reactions?: Record<string, string>; // Controlled partner reactions: e.g. { [uid]: "❤️" }
+  visibility?: "couple" | "private" | "archived"; // Controlled archive visibility
   media?: CoupleMemoryMedia;
   gameActivity?: CoupleMemoryGameActivity;
   milestoneData?: CoupleMemoryMilestone;
@@ -80,10 +83,25 @@ export interface CreateMemoryPayload {
   dateLabel?: string;
   context: string;
   note?: string;
+  caption?: string;
+  reactions?: Record<string, string>;
+  visibility?: "couple" | "private" | "archived";
+  media?: CoupleMemoryMedia;
   gameActivity?: CoupleMemoryGameActivity;
   milestoneData?: CoupleMemoryMilestone;
   relationshipDateData?: CoupleMemoryRelationshipDate;
   authorName?: string;
+}
+
+export interface UpdateMemoryPayload {
+  caption?: string;
+  reaction?: string;
+  reactions?: Record<string, string>;
+  visibility?: "couple" | "private" | "archived";
+  note?: string;
+  title?: string;
+  context?: string;
+  dateLabel?: string;
 }
 
 export type MemoryFilter = "all" | CoupleMemoryCategory;

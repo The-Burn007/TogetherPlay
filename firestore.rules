@@ -120,11 +120,53 @@ service cloud.firestore {
     }
 
     match /couples/{coupleId}/memories/{memoryId} {
+      // 1. Read: Allowed strictly to verified members of this couple
       allow read: if isCoupleMember(coupleId);
+
+      // 2. Create: Allowed only for couple members where author is the creator
+      // IMMUTABLE on creation: memoryId, coupleId, createdBy, createdAt, original storage reference
       allow create: if isCoupleMember(coupleId)
+        && request.resource.data.id == memoryId
+        && request.resource.data.coupleId == coupleId
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.coupleId == coupleId;
-      allow update, delete: if isCoupleMember(coupleId);
+        && request.resource.data.createdAt is string
+        && request.resource.data.date is string
+        // If media is attached, storagePath must be within this couple's memories namespace
+        // and cannot contain path traversal sequences ('..')
+        && (!('media' in request.resource.data) || request.resource.data.media == null
+            || (request.resource.data.media.storagePath is string
+                && request.resource.data.media.storagePath.matches('^couples/' + coupleId + '/memories/.*')
+                && !request.resource.data.media.storagePath.matches('.*\\.\\..*')));
+
+      // 3. Update: Strict immutability for core fields; only controlled updates allowed
+      // A couple member CANNOT:
+      // - change memory ID
+      // - change couple ID
+      // - change creator (createdBy)
+      // - change ownership
+      // - forge/mutate creation timestamp (createdAt)
+      // - replace another member's original storage reference (media.storagePath)
+      //
+      // Allowed updates are strictly CONTROLLED:
+      // - caption, reaction, reactions, visibility, note, title, context, dateLabel, updatedAt, media
+      allow update: if isCoupleMember(coupleId)
+        // Core immutability
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.coupleId == resource.data.coupleId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        // Original storage reference and filename cannot be replaced or hijacked
+        && (!('media' in resource.data) || resource.data.media == null
+            || (request.resource.data.media != null
+                && request.resource.data.media.storagePath == resource.data.media.storagePath
+                && request.resource.data.media.fileName == resource.data.media.fileName))
+        // Controlled update boundaries
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['caption', 'reaction', 'reactions', 'visibility', 'note', 'title', 'context', 'dateLabel', 'updatedAt', 'media']);
+
+      // 4. Delete: Strictly unauthorized unless requested by the creator who authored the memory
+      allow delete: if isCoupleMember(coupleId)
+        && resource.data.createdBy == request.auth.uid;
     }
 
     match /couples/{coupleId}/aiChallenges/{challengeId} {

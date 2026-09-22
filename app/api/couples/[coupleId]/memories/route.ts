@@ -174,7 +174,52 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return forbiddenResponse("Access denied. Only verified couple members can record memories.");
     }
 
-    // 5. Create memory document
+    // 5. Media storage reference security validation
+    let mediaPayload: CoupleMemory["media"] | undefined = undefined;
+    if (payload.media) {
+      const storagePath = payload.media.storagePath;
+      if (typeof storagePath !== "string" || !storagePath) {
+        return NextResponse.json({ error: "Invalid media: missing storagePath." }, { status: 400 });
+      }
+
+      // Check path traversal attempts (e.g. '../' or '..')
+      if (storagePath.includes("..") || storagePath.includes("//")) {
+        return NextResponse.json(
+          { error: "Security violation: path traversal detected in media reference." },
+          { status: 400 }
+        );
+      }
+
+      // Must be strictly confined to this couple's memories namespace
+      const expectedPrefix = `couples/${coupleId}/memories/`;
+      if (!storagePath.startsWith(expectedPrefix)) {
+        return NextResponse.json(
+          { error: "Security violation: media storagePath must reside within the couple's memory archive." },
+          { status: 403 }
+        );
+      }
+
+      // Ownership-aware check: if formatted as couples/{coupleId}/memories/{uid}/{fileName},
+      // UID MUST match authenticated user (cannot hijack or reference another user's private media folder)
+      const pathSuffix = storagePath.substring(expectedPrefix.length);
+      const parts = pathSuffix.split("/");
+      if (parts.length > 1) {
+        const pathOwnerUid = parts[0];
+        if (pathOwnerUid !== authUser.uid) {
+          return forbiddenResponse("Security violation: cannot associate media from another user's storage path.");
+        }
+      }
+
+      mediaPayload = {
+        storagePath,
+        fileName: payload.media.fileName || "photo.jpg",
+        contentType: payload.media.contentType || "image/jpeg",
+        fileSize: payload.media.fileSize,
+        caption: payload.media.caption ? payload.media.caption.trim() : undefined,
+      };
+    }
+
+    // 6. Create immutable memory document with server-generated ID & timestamps
     const memoryId = `mem_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
 
@@ -187,6 +232,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       dateLabel: payload.dateLabel || "Recently",
       context: payload.context.trim(),
       note: payload.note ? payload.note.trim() : undefined,
+      caption: payload.caption ? payload.caption.trim() : (mediaPayload?.caption || undefined),
+      reactions: payload.reactions || {},
+      visibility: payload.visibility || "couple",
+      media: mediaPayload,
       gameActivity: payload.gameActivity,
       milestoneData: payload.milestoneData,
       relationshipDateData: payload.relationshipDateData,

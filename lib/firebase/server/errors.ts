@@ -2,6 +2,36 @@
  * Authoritative Server Errors
  */
 
+export type ActionErrorCode =
+  | "UNAUTHENTICATED"
+  | "APP_CHECK_INVALID"
+  | "GAME_NOT_FOUND"
+  | "PLAYER_NOT_IN_GAME"
+  | "PLAYER_IMPERSONATION"
+  | "GAME_NOT_ACTIVE"
+  | "INVALID_ACTION"
+  | "INVALID_ACTION_TYPE"
+  | "INVALID_ACTION_PAYLOAD"
+  | "UNAUTHORIZED_ACTION"
+  | "ACTION_DISALLOWED_FOR_STATE"
+  | "NOT_PLAYER_TURN"
+  | "STALE_VERSION"
+  | "ACTION_ID_REUSED_CROSS_GAME"
+  | "ACTION_ID_REUSED_BY_OTHER_PLAYER"
+  | "PERSISTENCE_ERROR"
+  | "INTERNAL_ERROR";
+
+export class ActionValidationError extends Error {
+  constructor(
+    public code: ActionErrorCode,
+    message: string,
+    public statusCode: number = 400
+  ) {
+    super(message);
+    this.name = "ActionValidationError";
+  }
+}
+
 export class PersistenceError extends Error {
   public readonly code = "PERSISTENCE_ERROR" as const;
   public readonly statusCode = 500;

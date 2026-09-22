@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { submitGameAction, ActionValidationError } from "@/lib/firebase/server/submitGameAction";
 import { validateActionPayloadStructure } from "@/lib/firebase/server/security";
 import { AuthoritativeGameEngine } from "@/lib/firebase/server/authoritativeGameEngine";
-import type { GameAction, GameState, GameSession, GameResult } from "@/types/domain";
+import type { GameAction, GameState, GameSession, GameResult, PrivateGameState } from "@/types/domain";
 import type { GameRepositoryContract } from "@/lib/firebase/server/gameRepository";
 
 const GAME_ID = "game_audit_session_1";
@@ -25,12 +25,25 @@ const VALID_APP_CHECK = "valid_audit_app_check_jwt";
 class InMemoryAuditGameRepository implements GameRepositoryContract {
   public sessions = new Map<string, GameSession>();
   public states = new Map<string, GameState>();
+  public privateStates = new Map<string, PrivateGameState>();
   public results = new Map<string, unknown>();
   public actionClaims = new Map<string, { gameId: string; playerId: string; timestamp: number }>();
 
-  seedGame(session: GameSession, state: GameState): void {
+  seedGame(session: GameSession, state: GameState, privateState?: PrivateGameState): void {
     this.sessions.set(session.gameId, { ...session });
     this.states.set(state.gameId, { ...state });
+    if (privateState) {
+      this.privateStates.set(session.gameId, { ...privateState });
+    }
+  }
+
+  async getPrivateGameState(gameId: string): Promise<PrivateGameState | null> {
+    const s = this.privateStates.get(gameId);
+    return s ? JSON.parse(JSON.stringify(s)) : null;
+  }
+
+  async savePrivateGameState(gameId: string, state: PrivateGameState): Promise<void> {
+    this.privateStates.set(gameId, { ...state });
   }
 
   async getGameSession(gameId: string): Promise<GameSession | null> {

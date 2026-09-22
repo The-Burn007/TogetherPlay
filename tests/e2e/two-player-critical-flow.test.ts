@@ -143,8 +143,7 @@ class SimulatedBrowserSession {
       processedActionIds: {},
       isFinished: false,
       data: {
-        targetId: "watch",
-        board: ["watch", "compass", "key", "seal", "pen", "hourglass", "prism", "book", "camera", "bell", "monocle", "mug"],
+        board: [],
         roundAnswers: {},
       },
     };
@@ -367,7 +366,12 @@ describe("End-to-End Layer: Two Simultaneous Browser Sessions Critical Flow", ()
     sessionB.syncLocal(sessionA.localSession, livePlayingState);
     expect(sessionB.localState?.status).toBe("playing");
 
-    const targetId = String(livePlayingState?.data.targetId || "watch");
+    // Security check: public state must NOT reveal targetId
+    expect(livePlayingState?.data.targetId).toBeUndefined();
+
+    // Authoritative secret is retrieved exclusively from server private state
+    const privateState = await repository.getPrivateGameState(gameId);
+    const targetId = String(privateState?.targetId);
     const wrongCell = (livePlayingState?.data.board as string[] || []).find((c) => c !== targetId) || "pen";
 
     // -------------------------------------------------------------------------

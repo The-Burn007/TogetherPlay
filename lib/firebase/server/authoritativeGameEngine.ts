@@ -19,13 +19,27 @@
 import type {
   GameSession,
   GameState,
+  PublicGameState,
   GameAction,
   GameResult,
+  PrivateGameState,
   CoupleRaceTile,
   CoupleRacePowerType,
   CoupleRacePlayerState,
   CameraChallengePrompt,
+  CameraChallengeSubmission,
+  CameraChallengeReview,
+  CameraChallengeResolution,
 } from "@/types/domain";
+import { MAX_BOUNDED_PROCESSED_ACTIONS } from "@/types/domain";
+import { ActionValidationError } from "./errors";
+import {
+  getPublicState,
+  getPrivateState,
+  auditPublicStateForLeaks,
+  GAME_STATE_CONTRACTS,
+  FORBIDDEN_PUBLIC_FIELDS,
+} from "@/lib/games/gameStateContract";
 import {
   secureRandomInt,
   secureRandomChoice,
@@ -72,9 +86,32 @@ export interface GameEngineExecutionResult {
   updatedSession: GameSession;
   gameResult?: GameResult | null;
   authoritativePayload?: Record<string, unknown>;
+  updatedPrivateState?: PrivateGameState | null;
 }
 
 export class AuthoritativeGameEngine {
+  /**
+   * Produces an authoritative, client-safe PublicGameState.
+   * Strips all secret targets, hidden keys, and cheating vectors.
+   */
+  static getPublicState(fullState: {
+    state: GameState;
+    privateState?: PrivateGameState | null;
+    viewingPlayerId?: string;
+  }): PublicGameState {
+    return getPublicState(fullState);
+  }
+
+  /**
+   * Extracts or produces the server-only PrivateGameState.
+   */
+  static getPrivateState(fullState: {
+    state: GameState;
+    privateState?: PrivateGameState | null;
+  }): PrivateGameState | null {
+    return getPrivateState(fullState);
+  }
+
   /**
    * Generates a cryptographically secure random dice roll [min..max] (inclusive) on the server.
    * Uses rejection-sampled CSPRNG without modulo bias.
@@ -144,7 +181,8 @@ export class AuthoritativeGameEngine {
     currentState: GameState,
     action: GameAction,
     playerId: string,
-    serverTimestamp: number
+    serverTimestamp: number,
+    currentPrivateState?: PrivateGameState | null
   ): GameEngineExecutionResult {
     // Clone state immutably
     const nextState: GameState = {
@@ -163,6 +201,9 @@ export class AuthoritativeGameEngine {
 
     let createdResult: GameResult | null = null;
     let authoritativePayload: Record<string, unknown> = {};
+    let updatedPrivateState: PrivateGameState | null = currentPrivateState
+      ? { ...currentPrivateState }
+      : null;
 
     switch (action.type) {
       case "START_GAME": {
@@ -297,20 +338,30 @@ export class AuthoritativeGameEngine {
           // Authoritative 15-second round deadline for tactile digital tabletop play
           nextState.roundDeadlineServer = serverTimestamp + 15000;
           const roundGen = this.generateAuthoritativeRound(1, []);
-          nextState.data = {
-            ...nextState.data,
+
+          updatedPrivateState = {
+            gameId: session.gameId,
             targetId: roundGen.targetId,
             targetName: roundGen.target.name,
             targetCode: roundGen.target.code,
             targetClue: roundGen.target.clue,
-            board: roundGen.board,
             usedTargetIds: [roundGen.targetId],
+          };
+
+          nextState.data = {
+            ...nextState.data,
+            targetClue: roundGen.target.clue,
+            board: roundGen.board,
             roundWinnerId: null,
             roundWinningCell: null,
             lastMistake: null,
             roundStage: "playing",
             roundHistory: [],
           };
+          delete nextState.data.targetId;
+          delete nextState.data.targetName;
+          delete nextState.data.targetCode;
+          delete nextState.data.usedTargetIds;
 
           nextSession.status = "playing";
           nextSession.startedAt = new Date(serverTimestamp).toISOString();
@@ -318,8 +369,7 @@ export class AuthoritativeGameEngine {
           authoritativePayload = {
             started: true,
             round: 1,
-            targetId: roundGen.targetId,
-            targetName: roundGen.target.name,
+            targetClue: roundGen.target.clue,
             board: roundGen.board,
             roundDeadlineServer: nextState.roundDeadlineServer,
           };
@@ -723,7 +773,31 @@ export class AuthoritativeGameEngine {
       case "SUBMIT_ANSWER": {
         const rawPayload = (action.payload && typeof action.payload === "object" ? action.payload : {}) as Record<string, unknown>;
         const choice = String(rawPayload.cellId || rawPayload.choice || "");
-        const serverTarget = String(nextState.data.targetId || nextState.data.targetAnswer || "CORRECT_ANSWER");
+        const serverTarget = String(
+          currentPrivateState?.targetId ||
+          nextState.data.targetId ||
+          nextState.data.targetAnswer ||
+          "CORRECT_ANSWER"
+        );
+        const serverTargetName = String(
+          currentPrivateState?.targetName ||
+          nextState.data.targetName ||
+          "Antique Artifact"
+        );
+
+        // If private state was not previously initialized (e.g. seeded state), migrate to private state
+        if (!updatedPrivateState && (nextState.data.targetId || nextState.data.targetAnswer)) {
+          updatedPrivateState = {
+            gameId: session.gameId,
+            targetId: serverTarget,
+            targetName: serverTargetName,
+            targetCode: String(nextState.data.targetCode || ""),
+            targetClue: String(nextState.data.targetClue || ""),
+            usedTargetIds: Array.isArray(nextState.data.usedTargetIds)
+              ? (nextState.data.usedTargetIds as string[])
+              : [serverTarget],
+          };
+        }
 
         // If this round already has a recorded winner, ignore redundant clicks
         if (nextState.data.roundWinnerId) {
@@ -759,8 +833,7 @@ export class AuthoritativeGameEngine {
           roundHistory.push({
             round: nextState.currentRound,
             winnerId: playerId,
-            targetId: serverTarget,
-            targetName: nextState.data.targetName || serverTarget,
+            targetName: serverTargetName,
             pointsAwarded,
             speedBonus,
             scoresAtEnd: { ...nextState.scores },
@@ -779,6 +852,12 @@ export class AuthoritativeGameEngine {
             nextState.data.nextRoundAvailableAt = serverTimestamp + 2500;
           }
 
+          delete nextState.data.targetId;
+          delete nextState.data.targetName;
+          delete nextState.data.targetCode;
+          delete nextState.data.targetAnswer;
+          delete nextState.data.usedTargetIds;
+
           authoritativePayload = {
             isCorrect: true,
             cellId: choice,
@@ -788,6 +867,7 @@ export class AuthoritativeGameEngine {
             scores: { ...nextState.scores },
             currentRound: nextState.currentRound,
             isFinished: nextState.isFinished,
+            targetName: serverTargetName,
           };
         } else {
           // Authoritative Incorrect Feedback
@@ -804,6 +884,12 @@ export class AuthoritativeGameEngine {
           };
           nextState.data.lastMistake = mistake;
 
+          delete nextState.data.targetId;
+          delete nextState.data.targetName;
+          delete nextState.data.targetCode;
+          delete nextState.data.targetAnswer;
+          delete nextState.data.usedTargetIds;
+
           authoritativePayload = {
             isCorrect: false,
             cellId: choice,
@@ -817,6 +903,72 @@ export class AuthoritativeGameEngine {
       }
 
       case "NEXT_ROUND": {
+        if (currentState.isFinished || currentState.status === "game_end") {
+          throw new ActionValidationError(
+            "GAME_NOT_ACTIVE",
+            `Game is not active: Game '${session.gameId}' has already concluded with status '${currentState.status}'.`,
+            409
+          );
+        }
+
+        if (session.gameType === "couple_race") {
+          throw new ActionValidationError(
+            "ACTION_DISALLOWED_FOR_STATE",
+            "Action 'NEXT_ROUND' is not supported for turn-based game 'couple_race'. Use 'END_TURN' to advance turns.",
+            400
+          );
+        }
+
+        if (nextState.turnPlayerId && nextState.turnPlayerId !== playerId) {
+          throw new ActionValidationError(
+            "NOT_PLAYER_TURN",
+            `Action 'NEXT_ROUND' cannot be executed: it is player '${nextState.turnPlayerId}'s turn, not '${playerId}'.`,
+            400
+          );
+        }
+
+        // Authoritative State Machine Invariant:
+        // A round may advance ONLY when:
+        // 1. The round has been legitimately resolved on the server, OR
+        // 2. The authoritative server deadline has expired.
+        // Do NOT allow a client action alone to declare the round resolved.
+        let isRoundResolved = false;
+        if (currentState.status === "round_end") {
+          isRoundResolved = true;
+        } else if (session.gameType === "find_it_first") {
+          isRoundResolved =
+            nextState.data?.roundWinnerId != null ||
+            nextState.data?.roundWinningCell != null ||
+            nextState.data?.roundStage === "round_result";
+        } else if (session.gameType === "speed_duel") {
+          isRoundResolved =
+            nextState.data?.roundStage === "round_result" ||
+            nextState.data?.roundWinnerId != null ||
+            nextState.data?.falseStartPlayerId != null;
+        } else if (session.gameType === "camera_challenge") {
+          isRoundResolved =
+            nextState.data?.stage === "result" ||
+            nextState.data?.isGameEnd === true;
+        } else {
+          isRoundResolved = nextState.data?.roundWinnerId != null;
+        }
+
+        const isDeadlineExpired =
+          (typeof nextState.roundDeadlineServer === "number" &&
+            nextState.roundDeadlineServer > 0 &&
+            serverTimestamp >= nextState.roundDeadlineServer) ||
+          (typeof nextState.data?.stageDeadlineServer === "number" &&
+            nextState.data.stageDeadlineServer > 0 &&
+            serverTimestamp >= nextState.data.stageDeadlineServer);
+
+        if (!isRoundResolved && !isDeadlineExpired) {
+          throw new ActionValidationError(
+            "ACTION_DISALLOWED_FOR_STATE",
+            `Cannot advance round: active round in '${session.gameType}' has not been resolved and server deadline has not expired.`,
+            400
+          );
+        }
+
         if (session.gameType === "speed_duel") {
           const history = Array.isArray(nextState.data.roundHistory) ? nextState.data.roundHistory : [];
           const alexWins = history.filter((r) => r.winnerId === nextSession.playerIds[0]).length;
@@ -869,19 +1021,32 @@ export class AuthoritativeGameEngine {
         }
 
         nextState.currentRound += 1;
-        const usedIds = Array.isArray(nextState.data.usedTargetIds) ? (nextState.data.usedTargetIds as string[]) : [];
+        const usedIds = Array.isArray(updatedPrivateState?.usedTargetIds)
+          ? (updatedPrivateState.usedTargetIds as string[])
+          : Array.isArray(nextState.data.usedTargetIds)
+          ? (nextState.data.usedTargetIds as string[])
+          : [];
         const roundGen = this.generateAuthoritativeRound(nextState.currentRound, usedIds);
 
-        nextState.data.targetId = roundGen.targetId;
-        nextState.data.targetName = roundGen.target.name;
-        nextState.data.targetCode = roundGen.target.code;
+        updatedPrivateState = {
+          gameId: session.gameId,
+          targetId: roundGen.targetId,
+          targetName: roundGen.target.name,
+          targetCode: roundGen.target.code,
+          targetClue: roundGen.target.clue,
+          usedTargetIds: [...usedIds, roundGen.targetId],
+        };
+
         nextState.data.targetClue = roundGen.target.clue;
         nextState.data.board = roundGen.board;
-        nextState.data.usedTargetIds = [...usedIds, roundGen.targetId];
         nextState.data.roundWinnerId = null;
         nextState.data.roundWinningCell = null;
         nextState.data.lastMistake = null;
         nextState.data.roundStage = "playing";
+        delete nextState.data.targetId;
+        delete nextState.data.targetName;
+        delete nextState.data.targetCode;
+        delete nextState.data.usedTargetIds;
 
         nextState.status = "playing";
         nextState.roundStartedAtServer = serverTimestamp;
@@ -889,8 +1054,7 @@ export class AuthoritativeGameEngine {
 
         authoritativePayload = {
           round: nextState.currentRound,
-          targetId: roundGen.targetId,
-          targetName: roundGen.target.name,
+          targetClue: roundGen.target.clue,
           board: roundGen.board,
           roundDeadlineServer: nextState.roundDeadlineServer,
         };
@@ -1033,13 +1197,18 @@ export class AuthoritativeGameEngine {
         }
 
         const roundGen = this.generateAuthoritativeRound(1, []);
-        nextState.data = {
+        updatedPrivateState = {
+          gameId: session.gameId,
           targetId: roundGen.targetId,
           targetName: roundGen.target.name,
           targetCode: roundGen.target.code,
           targetClue: roundGen.target.clue,
-          board: roundGen.board,
           usedTargetIds: [roundGen.targetId],
+        };
+
+        nextState.data = {
+          targetClue: roundGen.target.clue,
+          board: roundGen.board,
           roundWinnerId: null,
           roundWinningCell: null,
           lastMistake: null,
@@ -1053,8 +1222,7 @@ export class AuthoritativeGameEngine {
         authoritativePayload = {
           rematchStarted: true,
           round: 1,
-          targetId: roundGen.targetId,
-          targetName: roundGen.target.name,
+          targetClue: roundGen.target.clue,
           board: roundGen.board,
           roundDeadlineServer: nextState.roundDeadlineServer,
         };
@@ -1273,24 +1441,74 @@ export class AuthoritativeGameEngine {
 
       case "SUBMIT_CAMERA_CHALLENGE": {
         if (session.gameType === "camera_challenge") {
-          const subs = (nextState.data.submissions as Record<string, { submittedAt: number; ready: boolean }>) || {};
+          // Check expired challenge
+          const isExpired =
+            (typeof nextState.data?.stageDeadlineServer === "number" &&
+              nextState.data.stageDeadlineServer > 0 &&
+              serverTimestamp > nextState.data.stageDeadlineServer) ||
+            (typeof nextState.roundDeadlineServer === "number" &&
+              nextState.roundDeadlineServer > 0 &&
+              serverTimestamp > nextState.roundDeadlineServer);
+          if (isExpired) {
+            throw new ActionValidationError(
+              "ACTION_DISALLOWED_FOR_STATE",
+              "Cannot submit camera challenge: challenge deadline has expired on the server.",
+              400
+            );
+          }
+
+          const rawPayload = (action.payload && typeof action.payload === "object" ? action.payload : {}) as Record<string, unknown>;
+          const subs = (nextState.data.submissions as Record<string, CameraChallengeSubmission>) || {};
+
+          // Idempotent duplicate: if player already submitted, preserve submission
+          if (subs[playerId]?.ready) {
+            authoritativePayload = {
+              idempotentDuplicate: true,
+              playerSubmitted: playerId,
+              stage: nextState.data.stage || "submit",
+              submissions: subs,
+            };
+            break;
+          }
+
           subs[playerId] = {
             submittedAt: serverTimestamp,
             ready: true,
+            mediaRef: typeof rawPayload.mediaRef === "string" ? rawPayload.mediaRef : undefined,
+            captureMeta: rawPayload.captureMeta && typeof rawPayload.captureMeta === "object" ? (rawPayload.captureMeta as Record<string, unknown>) : undefined,
           };
           nextState.data.submissions = subs;
 
           const allPlayersSubmitted = nextSession.playerIds.every((pid) => subs[pid]?.ready);
 
-          if (allPlayersSubmitted || nextSession.playerIds.length <= 1) {
+          if (allPlayersSubmitted && nextSession.playerIds.length > 1) {
+            // Both players submitted -> transition to partner_review stage
+            nextState.data.stage = "partner_review";
+            nextState.data.stageStartedAtServer = serverTimestamp;
+            nextState.data.stageDeadlineServer = serverTimestamp + 60000;
+            nextState.data.reviews = {};
+
+            authoritativePayload = {
+              allSubmitted: true,
+              stage: "partner_review",
+              readyForReview: true,
+              submissions: subs,
+            };
+          } else if (allPlayersSubmitted && nextSession.playerIds.length <= 1) {
+            // Solo/Single-player test mode: auto-resolve
+            const points = 100;
+            nextState.scores[playerId] = (nextState.scores[playerId] || 0) + points;
             nextState.data.stage = "result";
             nextState.status = "round_end";
-
-            // Award synergy points to both players
-            const points = 100;
-            for (const pid of nextSession.playerIds) {
-              nextState.scores[pid] = (nextState.scores[pid] || 0) + points;
-            }
+            nextState.data.resolution = {
+              status: "approved",
+              allApproved: true,
+              approvedPlayerIds: [playerId],
+              rejectedPlayerIds: [],
+              scoresAwarded: { [playerId]: points },
+              resolvedAt: serverTimestamp,
+              round: nextState.currentRound,
+            };
 
             const history = Array.isArray(nextState.data.roundHistory) ? [...nextState.data.roundHistory] : [];
             const currentPrompt = nextState.data.currentPrompt as CameraChallengePrompt;
@@ -1298,7 +1516,8 @@ export class AuthoritativeGameEngine {
               round: nextState.currentRound,
               promptId: currentPrompt?.id || "prompt",
               promptTitle: currentPrompt?.title || "Challenge",
-              completedPlayerIds: Object.keys(subs),
+              completedPlayerIds: [playerId],
+              resolution: nextState.data.resolution,
               serverTimestamp,
             });
             nextState.data.roundHistory = history;
@@ -1324,6 +1543,195 @@ export class AuthoritativeGameEngine {
               playerSubmitted: playerId,
               stage: "submit",
               waitingForPartner: true,
+            };
+          }
+        }
+        break;
+      }
+
+      case "APPROVE_CHALLENGE":
+      case "REJECT_CHALLENGE":
+      case "REVIEW_CHALLENGE": {
+        if (session.gameType === "camera_challenge") {
+          const rawPayload = (action.payload && typeof action.payload === "object" ? action.payload : {}) as Record<string, unknown>;
+          const subs = (nextState.data.submissions as Record<string, CameraChallengeSubmission>) || {};
+
+          // Invariant: Player cannot approve their own submission
+          const targetPlayerId = String(
+            rawPayload.targetPlayerId ||
+            nextSession.playerIds.find((pid) => pid !== playerId) ||
+            ""
+          );
+
+          if (!targetPlayerId || targetPlayerId === playerId) {
+            throw new ActionValidationError(
+              "UNAUTHORIZED_ACTION",
+              "Client cannot approve or review its own submission. Only the partner may review.",
+              403
+            );
+          }
+
+          // Target must be a participant in the session
+          if (!nextSession.playerIds.includes(targetPlayerId)) {
+            throw new ActionValidationError(
+              "INVALID_ACTION_PAYLOAD",
+              `Target player '${targetPlayerId}' is not a participant in this game session.`,
+              400
+            );
+          }
+
+          // Target must have submitted their challenge
+          if (!subs[targetPlayerId]?.ready) {
+            throw new ActionValidationError(
+              "ACTION_DISALLOWED_FOR_STATE",
+              `Cannot review partner '${targetPlayerId}' before they have submitted their challenge.`,
+              400
+            );
+          }
+
+          // Check deadline for review
+          const isReviewExpired =
+            typeof nextState.data?.stageDeadlineServer === "number" &&
+            nextState.data.stageDeadlineServer > 0 &&
+            serverTimestamp > nextState.data.stageDeadlineServer;
+          if (isReviewExpired) {
+            throw new ActionValidationError(
+              "ACTION_DISALLOWED_FOR_STATE",
+              "Cannot submit review: partner review deadline has expired on the server.",
+              400
+            );
+          }
+
+          const isApproved =
+            action.type === "APPROVE_CHALLENGE"
+              ? true
+              : action.type === "REJECT_CHALLENGE"
+              ? false
+              : Boolean(rawPayload.approved ?? (rawPayload.decision === "approve"));
+
+          const decision: "approve" | "reject" = isApproved ? "approve" : "reject";
+          const feedback = typeof rawPayload.feedback === "string"
+            ? rawPayload.feedback
+            : typeof rawPayload.reason === "string"
+            ? rawPayload.reason
+            : "";
+
+          const reviews = (nextState.data.reviews as Record<string, CameraChallengeReview>) || {};
+
+          // Idempotent review: if reviewer already recorded identical decision, preserve without duplication
+          if (reviews[playerId] && reviews[playerId].decision === decision) {
+            authoritativePayload = {
+              idempotentDuplicate: true,
+              reviewerId: playerId,
+              targetPlayerId,
+              decision,
+              stage: nextState.data.stage,
+            };
+            break;
+          }
+
+          reviews[playerId] = {
+            reviewerId: playerId,
+            targetPlayerId,
+            decision,
+            approved: isApproved,
+            reviewedAt: serverTimestamp,
+            feedback,
+          };
+          nextState.data.reviews = reviews;
+
+          // Check if all expected partner reviews are completed
+          const expectedReviewers = nextSession.playerIds.filter((pid) => pid !== "AI");
+          const allReviewsComplete = expectedReviewers.every((pid) => Boolean(reviews[pid]));
+
+          if (allReviewsComplete) {
+            // Deterministic scoring controlled authoritatively on the server
+            const approvedPlayerIds: string[] = [];
+            const rejectedPlayerIds: string[] = [];
+            const scoresAwarded: Record<string, number> = {};
+
+            for (const pid of nextSession.playerIds) {
+              scoresAwarded[pid] = 0;
+            }
+
+            for (const reviewerId of Object.keys(reviews)) {
+              const rev = reviews[reviewerId];
+              if (rev.approved) {
+                approvedPlayerIds.push(rev.targetPlayerId);
+              } else {
+                rejectedPlayerIds.push(rev.targetPlayerId);
+              }
+            }
+
+            const allApproved = approvedPlayerIds.length === nextSession.playerIds.length;
+            const noneApproved = approvedPlayerIds.length === 0;
+
+            if (allApproved) {
+              // Mutual synergy: 100 points to both partners
+              for (const pid of nextSession.playerIds) {
+                scoresAwarded[pid] = 100;
+                nextState.scores[pid] = (nextState.scores[pid] || 0) + 100;
+              }
+            } else if (!noneApproved) {
+              // Partial synergy: 50 points to approved participants
+              for (const pid of approvedPlayerIds) {
+                scoresAwarded[pid] = 50;
+                nextState.scores[pid] = (nextState.scores[pid] || 0) + 50;
+              }
+              for (const pid of rejectedPlayerIds) {
+                scoresAwarded[pid] = 0;
+              }
+            }
+
+            const resolution: CameraChallengeResolution = {
+              status: allApproved ? "approved" : noneApproved ? "rejected" : "partial",
+              allApproved,
+              approvedPlayerIds,
+              rejectedPlayerIds,
+              scoresAwarded,
+              resolvedAt: serverTimestamp,
+              round: nextState.currentRound,
+            };
+
+            nextState.data.stage = "result";
+            nextState.status = "round_end";
+            nextState.data.resolution = resolution;
+
+            const history = Array.isArray(nextState.data.roundHistory) ? [...nextState.data.roundHistory] : [];
+            const currentPrompt = nextState.data.currentPrompt as CameraChallengePrompt;
+            history.push({
+              round: nextState.currentRound,
+              promptId: currentPrompt?.id || "prompt",
+              promptTitle: currentPrompt?.title || "Challenge",
+              completedPlayerIds: approvedPlayerIds,
+              reviews,
+              resolution,
+              serverTimestamp,
+            });
+            nextState.data.roundHistory = history;
+
+            if (nextState.currentRound >= nextState.maxRounds) {
+              createdResult = this.finalizeGame(nextSession, nextState, serverTimestamp);
+              nextState.status = "game_end";
+              nextState.data.stage = "result";
+              nextState.data.isGameEnd = true;
+            }
+
+            authoritativePayload = {
+              allReviewed: true,
+              stage: "result",
+              resolution,
+              scores: { ...nextState.scores },
+              scoresAwarded,
+              currentRound: nextState.currentRound,
+              isFinished: nextState.isFinished,
+            };
+          } else {
+            authoritativePayload = {
+              stage: "partner_review",
+              reviewerId: playerId,
+              decision,
+              waitingForPartnerReview: true,
             };
           }
         }
@@ -1366,6 +1774,43 @@ export class AuthoritativeGameEngine {
 
       case "NEXT_CHALLENGE": {
         if (session.gameType === "camera_challenge") {
+          if (currentState.isFinished || currentState.status === "game_end") {
+            throw new ActionValidationError(
+              "GAME_NOT_ACTIVE",
+              `Game is not active: Game '${session.gameId}' has already concluded with status '${currentState.status}'.`,
+              409
+            );
+          }
+
+          if (nextState.turnPlayerId && nextState.turnPlayerId !== playerId) {
+            throw new ActionValidationError(
+              "NOT_PLAYER_TURN",
+              `Action 'NEXT_CHALLENGE' cannot be executed: it is player '${nextState.turnPlayerId}'s turn, not '${playerId}'.`,
+              400
+            );
+          }
+
+          const isResolved =
+            currentState.status === "round_end" ||
+            nextState.data?.stage === "result" ||
+            nextState.data?.isGameEnd === true;
+
+          const isDeadlineExpired =
+            (typeof nextState.data?.stageDeadlineServer === "number" &&
+              nextState.data.stageDeadlineServer > 0 &&
+              serverTimestamp >= nextState.data.stageDeadlineServer) ||
+            (typeof nextState.roundDeadlineServer === "number" &&
+              nextState.roundDeadlineServer > 0 &&
+              serverTimestamp >= nextState.roundDeadlineServer);
+
+          if (!isResolved && !isDeadlineExpired) {
+            throw new ActionValidationError(
+              "ACTION_DISALLOWED_FOR_STATE",
+              `Cannot advance challenge: active Camera Challenge has not been resolved and deadline has not expired.`,
+              400
+            );
+          }
+
           if (nextState.currentRound >= nextState.maxRounds) {
             createdResult = this.finalizeGame(nextSession, nextState, serverTimestamp);
             nextState.status = "game_end";
@@ -1384,6 +1829,8 @@ export class AuthoritativeGameEngine {
           nextState.data.currentPrompt = nextPrompt;
           nextState.data.stage = "challenge";
           nextState.data.submissions = {};
+          nextState.data.reviews = {};
+          delete nextState.data.resolution;
           nextState.status = "playing";
           nextState.roundStartedAtServer = serverTimestamp;
           nextState.roundDeadlineServer = serverTimestamp + 60000;
@@ -1420,6 +1867,16 @@ export class AuthoritativeGameEngine {
 
     // Record clientActionId for idempotency
     nextState.processedActionIds[action.clientActionId] = serverTimestamp;
+    const allActionIds = Object.keys(nextState.processedActionIds);
+    if (allActionIds.length > MAX_BOUNDED_PROCESSED_ACTIONS) {
+      allActionIds
+        .sort((a, b) => (nextState.processedActionIds[b] || 0) - (nextState.processedActionIds[a] || 0))
+        .slice(MAX_BOUNDED_PROCESSED_ACTIONS)
+        .forEach((id) => {
+          delete nextState.processedActionIds[id];
+        });
+    }
+
     nextState.lastProcessedAction = {
       clientActionId: action.clientActionId,
       type: action.type,
@@ -1427,11 +1884,18 @@ export class AuthoritativeGameEngine {
       serverTimestamp,
     };
 
+    // Produce client-safe PublicGameState via formal contract
+    const sanitizedPublicState = getPublicState({
+      state: nextState,
+      privateState: updatedPrivateState,
+    });
+
     return {
-      updatedState: nextState,
+      updatedState: sanitizedPublicState,
       updatedSession: nextSession,
       gameResult: createdResult,
       authoritativePayload,
+      updatedPrivateState,
     };
   }
 

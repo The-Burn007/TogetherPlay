@@ -146,7 +146,9 @@ export default function MemoriesPage() {
         await memoryService.deleteMemory(
           coupleId,
           memory.id,
-          memory.media?.storagePath
+          memory.media?.storagePath,
+          memory.createdBy,
+          user?.uid
         );
         setMemories((prev) => prev.filter((m) => m.id !== memory.id));
         if (selectedMemory?.id === memory.id) {
@@ -159,7 +161,7 @@ export default function MemoriesPage() {
         throw err;
       }
     },
-    [coupleId, selectedMemory, showToast]
+    [coupleId, selectedMemory, showToast, user]
   );
 
   const filterTabs: { id: MemoryFilter; label: string; count: number; icon: React.ReactNode }[] = [

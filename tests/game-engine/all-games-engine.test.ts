@@ -267,10 +267,41 @@ describe("Game Engine Layer: Comprehensive Test of All 4 Games", () => {
       });
 
       expect(resB.accepted).toBe(true);
-      // Both submitted: points awarded to both partners
-      expect(resB.gameState.scores[PLAYER_A]).toBeGreaterThan(0);
-      expect(resB.gameState.scores[PLAYER_B]).toBeGreaterThan(0);
-      expect(resB.gameState.data.stage).toBe("result");
+      expect(resB.gameState.data.stage).toBe("partner_review");
+
+      // Player A reviews and approves Player B
+      const revA: GameAction = {
+        gameId,
+        clientActionId: "cam_rev_a",
+        type: "APPROVE_CHALLENGE",
+        payload: { targetPlayerId: PLAYER_B },
+        clientTimestamp: Date.now() + 10,
+      };
+      const resRevA = await submitGameAction(revA, {
+        auth: { uid: PLAYER_A },
+        repository,
+        enforceAppCheck: false,
+      });
+      expect(resRevA.accepted).toBe(true);
+
+      // Player B reviews and approves Player A
+      const revB: GameAction = {
+        gameId,
+        clientActionId: "cam_rev_b",
+        type: "APPROVE_CHALLENGE",
+        payload: { targetPlayerId: PLAYER_A },
+        clientTimestamp: Date.now() + 20,
+      };
+      const resRevB = await submitGameAction(revB, {
+        auth: { uid: PLAYER_B },
+        repository,
+        enforceAppCheck: false,
+      });
+      expect(resRevB.accepted).toBe(true);
+      // Both submitted & approved: points awarded to both partners
+      expect(resRevB.gameState.scores[PLAYER_A]).toBeGreaterThan(0);
+      expect(resRevB.gameState.scores[PLAYER_B]).toBeGreaterThan(0);
+      expect(resRevB.gameState.data.stage).toBe("result");
     });
   });
 });

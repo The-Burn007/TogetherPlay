@@ -3,7 +3,8 @@ import { serverGameRepository, PersistenceError, logStructuredError } from "@/li
 import { AuthoritativeGameEngine, CAMERA_CHALLENGES } from "@/lib/firebase/server/authoritativeGameEngine";
 import { requireServerAuth, forbiddenResponse } from "@/lib/firebase/server/auth";
 import { requireAppCheck } from "@/lib/firebase/server/security";
-import type { GameSession, GameState, GameType } from "@/types/domain";
+import type { GameSession, GameState, PublicGameState, GameType } from "@/types/domain";
+import { getPublicState } from "@/lib/games/gameStateContract";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,15 @@ export async function GET(request: NextRequest) {
       return forbiddenResponse("Access denied: You are not a player in this game session.");
     }
 
-    return NextResponse.json(aggregate, { status: 200 });
+    const sanitizedAggregate = {
+      session: aggregate.session,
+      state: getPublicState({
+        state: aggregate.state,
+        viewingPlayerId: authUser.uid,
+      }),
+    };
+
+    return NextResponse.json(sanitizedAggregate, { status: 200 });
   } catch (error) {
     if (error instanceof PersistenceError) {
       logStructuredError({
@@ -167,7 +176,6 @@ export async function POST(request: NextRequest) {
     const isSpeedDuel = gameType === "speed_duel";
     const isCoupleRace = gameType === "couple_race";
     const isCameraChallenge = gameType === "camera_challenge";
-    const roundGen = isSpeedDuel || isCoupleRace || isCameraChallenge ? null : AuthoritativeGameEngine.generateAuthoritativeRound(1, []);
     const speedDuelTensionDelay = 2200;
     const speedDuelTargetTime = now + speedDuelTensionDelay;
 
@@ -249,13 +257,10 @@ export async function POST(request: NextRequest) {
         isGameEnd: false,
       };
     } else {
+      // Pre-game ready state contains NO secret target data (targetId, targetName, targetCode, targetAnswer, usedTargetIds).
+      // The authoritative round target is generated exclusively when START_GAME is submitted and stored in privateGameStates.
       initialData = {
-        targetId: roundGen!.targetId,
-        targetName: roundGen!.target.name,
-        targetCode: roundGen!.target.code,
-        targetClue: roundGen!.target.clue,
-        board: roundGen!.board,
-        usedTargetIds: [roundGen!.targetId],
+        board: [],
         roundWinnerId: null,
         roundWinningCell: null,
         lastMistake: null,
@@ -286,10 +291,13 @@ export async function POST(request: NextRequest) {
       winnerId: null,
     };
 
-    await serverGameRepository.saveGameSession(session);
-    await serverGameRepository.saveEphemeralGameState(state);
+    // Produce strictly sanitized PublicGameState via formal contract
+    const publicState = getPublicState({ state, viewingPlayerId: authUid });
 
-    return NextResponse.json({ session, state }, { status: 201 });
+    await serverGameRepository.saveGameSession(session);
+    await serverGameRepository.saveEphemeralGameState(publicState);
+
+    return NextResponse.json({ session, state: publicState }, { status: 201 });
   } catch (error) {
     if (error instanceof PersistenceError) {
       logStructuredError({

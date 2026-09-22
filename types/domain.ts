@@ -205,6 +205,9 @@ export type GameActionType =
   | "SUBMIT_REACTION"
   | "TRIGGER_TARGET"
   | "SUBMIT_CAMERA_CHALLENGE"
+  | "APPROVE_CHALLENGE"
+  | "REJECT_CHALLENGE"
+  | "REVIEW_CHALLENGE"
   | "START_COUNTDOWN"
   | "START_PERFORM"
   | "SKIP_CHALLENGE"
@@ -236,6 +239,9 @@ export interface GameActionResult {
   gameResult?: GameResult;
 }
 
+export const MAX_BOUNDED_PROCESSED_ACTIONS = 25;
+export const ACTION_CLAIM_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
 export interface ProcessedActionRecord {
   clientActionId: string;
   type: string;
@@ -244,13 +250,30 @@ export interface ProcessedActionRecord {
   serverTimestamp: number;
   stateVersion: number;
   payload?: unknown;
+  requestPayloadFingerprint?: string;
+}
+
+export interface ActionClaimRecord {
+  gameId: string;
+  playerId: string;
+  timestamp: number;
+  type?: string;
+  payloadHash?: string;
+  status: "pending" | "completed";
+  stateVersion?: number;
+  resultPayload?: unknown;
+  expiresAt: number;
+  completedAt?: number;
 }
 
 /**
- * Authoritative ephemeral GameState stored in Firebase Realtime Database.
- * The server is strictly authoritative: clients can read but cannot write.
+ * Authoritative Client-Safe Ephemeral Public Game State.
+ * The browser must receive only PublicGameState.
+ * Guaranteed to be stripped of all confidential targets, hidden answers,
+ * server random seeds, future challenges, or secret mappings.
+ * Clients can read from RTDB gameStates/{gameId} but cannot write.
  */
-export interface GameState {
+export interface PublicGameState {
   gameId: string;
   gameType: GameType;
   status: GameStatus;
@@ -275,6 +298,45 @@ export interface GameState {
   };
   isFinished: boolean;
   winnerId?: string | null;
+}
+
+/**
+ * GameState alias for PublicGameState ensuring broad backward compatibility.
+ * The server and client use PublicGameState as the canonical public representation.
+ */
+export type GameState = PublicGameState;
+
+/**
+ * Authoritative Server-Only Private Game State.
+ * Stored securely at privateGameStates/{gameId} in Firebase RTDB or server memory.
+ * Strictly denied to all client read/write rules.
+ * Contains confidential round targets, hidden answers, future challenge catalogs,
+ * precomputed random seeds, and internal tracking.
+ */
+export interface PrivateGameState {
+  gameId: string;
+  targetId?: string;
+  targetName?: string;
+  targetCode?: string;
+  targetClue?: string;
+  targetAnswer?: string;
+  usedTargetIds?: string[];
+  tensionDelayMs?: number;
+  plannedTargetTime?: number;
+  answerKey?: string | number | Record<string, unknown>;
+  secretSeed?: string | number;
+  upcomingRounds?: unknown[];
+  playerSecrets?: Record<string, Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
+/**
+ * FullServerGameState represents the internal server state before public projection.
+ * Server components may hold and process FullServerGameState.
+ */
+export interface FullServerGameState {
+  state: GameState;
+  privateState?: PrivateGameState | null;
 }
 
 /**
@@ -352,6 +414,7 @@ export type CameraChallengeStage =
   | "countdown"
   | "perform"
   | "submit"
+  | "partner_review"
   | "result";
 
 export interface CameraChallengePrompt {
@@ -364,11 +427,39 @@ export interface CameraChallengePrompt {
   durationSeconds?: number;
 }
 
+export interface CameraChallengeSubmission {
+  submittedAt: number;
+  ready: boolean;
+  mediaRef?: string;
+  captureMeta?: Record<string, unknown>;
+}
+
+export interface CameraChallengeReview {
+  reviewerId: string;
+  targetPlayerId: string;
+  decision: "approve" | "reject";
+  approved: boolean;
+  reviewedAt: number;
+  feedback?: string;
+}
+
+export interface CameraChallengeResolution {
+  status: "approved" | "rejected" | "partial";
+  allApproved: boolean;
+  approvedPlayerIds: string[];
+  rejectedPlayerIds: string[];
+  scoresAwarded: Record<string, number>;
+  resolvedAt: number;
+  round: number;
+}
+
 export interface CameraChallengeRoundHistoryItem {
   round: number;
   promptId: string;
   promptTitle: string;
   completedPlayerIds: string[];
+  reviews?: Record<string, CameraChallengeReview>;
+  resolution?: CameraChallengeResolution;
   skipped?: boolean;
   serverTimestamp: number;
 }
@@ -380,7 +471,9 @@ export interface CameraChallengeState {
   stage: CameraChallengeStage;
   currentPrompt: CameraChallengePrompt;
   stageDeadlineServer: number;
-  submissions: Record<string, { submittedAt: number; ready: boolean }>;
+  submissions: Record<string, CameraChallengeSubmission>;
+  reviews?: Record<string, CameraChallengeReview>;
+  resolution?: CameraChallengeResolution;
   skips?: Record<string, boolean>;
   roundHistory: CameraChallengeRoundHistoryItem[];
   scores: Record<string, number>;

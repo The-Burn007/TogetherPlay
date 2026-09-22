@@ -27,15 +27,31 @@ import type {
   WebRtcSignalCandidate,
 } from "@/types/domain";
 
+export type SignalingSecurityErrorCode =
+  | "UNAUTHENTICATED"
+  | "UNAUTHORIZED"
+  | "INVALID_ROOM"
+  | "PERMISSION_DENIED"
+  | "PAYLOAD_TOO_LARGE"
+  | "RATE_LIMITED"
+  | "WRONG_PARTICIPANT"
+  | "STALE_ROOM";
+
 export class SignalingSecurityError extends Error {
   constructor(
     message: string,
-    public readonly code: "UNAUTHENTICATED" | "UNAUTHORIZED" | "INVALID_ROOM" | "PERMISSION_DENIED"
+    public readonly code: SignalingSecurityErrorCode
   ) {
     super(message);
     this.name = "SignalingSecurityError";
   }
 }
+
+export const MAX_SDP_PAYLOAD_CHARS = 32768; // 32 KB maximum for SDP
+export const MAX_ICE_CANDIDATE_CHARS = 2048; // 2 KB maximum for ICE candidate string
+export const MAX_CANDIDATES_PER_SESSION = 100; // max candidates per peer session
+export const MAX_WRITES_PER_MINUTE = 60; // rate limit: max writes per minute
+export const MAX_STALE_ROOM_AGE_MS = 15 * 60 * 1000; // 15 minutes max room activity threshold
 
 export interface SignalingServiceContract {
   publishParticipant(roomId: string, participant: WebRtcParticipant): Promise<void>;
@@ -65,6 +81,7 @@ export interface SignalingServiceContract {
     callback: (candidate: WebRtcSignalCandidate) => void
   ): () => void;
   clearRoomSignaling(roomId: string, myUserId: string): Promise<void>;
+  cleanStaleRoomSignaling(roomId: string, maxAgeMs?: number): Promise<{ cleaned: boolean }>;
 }
 
 // In-memory signaling bus for local simulation, dual browser testing, or offline test harnesses
@@ -76,6 +93,10 @@ class MemorySignalingBus {
   private listeners = new Map<string, Set<(data: unknown) => void>>();
   private authorizedRooms = new Map<string, Set<string>>();
   private strictAuthorization = false;
+  private roomActivity = new Map<string, number>();
+  private staleRooms = new Set<string>();
+  private writeTimestamps = new Map<string, number[]>();
+  private candidateCounts = new Map<string, number>();
 
   setStrictAuthorization(enabled: boolean) {
     this.strictAuthorization = enabled;
@@ -87,17 +108,110 @@ class MemorySignalingBus {
     }
     const set = this.authorizedRooms.get(roomId)!;
     userIds.forEach((id) => set.add(id));
+    this.touchRoom(roomId);
   }
 
   revokeRoom(roomId: string) {
     this.authorizedRooms.delete(roomId);
+    this.roomActivity.delete(roomId);
+    this.staleRooms.delete(roomId);
   }
 
   isUserAuthorized(roomId: string, userId: string): boolean {
     if (this.authorizedRooms.has(roomId)) {
       return this.authorizedRooms.get(roomId)!.has(userId);
     }
-    return !this.strictAuthorization;
+    if (this.strictAuthorization || this.authorizedRooms.size > 0) {
+      return false;
+    }
+    return true;
+  }
+
+  touchRoom(roomId: string, timestamp = Date.now()): void {
+    this.roomActivity.set(roomId, timestamp);
+    this.staleRooms.delete(roomId);
+  }
+
+  markRoomStale(roomId: string): void {
+    this.staleRooms.add(roomId);
+  }
+
+  setRoomStale(roomId: string, stale: boolean): void {
+    if (stale) {
+      this.staleRooms.add(roomId);
+    } else {
+      this.staleRooms.delete(roomId);
+      this.touchRoom(roomId);
+    }
+  }
+
+  setRoomActivity(roomId: string, timestamp: number): void {
+    this.roomActivity.set(roomId, timestamp);
+  }
+
+  isRoomStale(roomId: string, maxAgeMs = MAX_STALE_ROOM_AGE_MS): boolean {
+    if (this.staleRooms.has(roomId)) {
+      return true;
+    }
+    const lastActivity = this.roomActivity.get(roomId);
+    if (lastActivity !== undefined) {
+      return Date.now() - lastActivity > maxAgeMs;
+    }
+    return false;
+  }
+
+  checkWriteLimits(roomId: string, userId: string, isCandidate = false): void {
+    const key = `${roomId}:${userId}`;
+    const now = Date.now();
+    const windowMs = 60 * 1000;
+
+    let timestamps = this.writeTimestamps.get(key) || [];
+    timestamps = timestamps.filter((t) => now - t < windowMs);
+
+    if (timestamps.length >= MAX_WRITES_PER_MINUTE) {
+      throw new SignalingSecurityError(
+        `Signaling write limit exceeded (${MAX_WRITES_PER_MINUTE} writes/min). Request rejected.`,
+        "RATE_LIMITED"
+      );
+    }
+
+    if (isCandidate) {
+      const count = (this.candidateCounts.get(key) || 0) + 1;
+      if (count > MAX_CANDIDATES_PER_SESSION) {
+        throw new SignalingSecurityError(
+          `ICE candidate limit exceeded for this session (max ${MAX_CANDIDATES_PER_SESSION} candidates).`,
+          "RATE_LIMITED"
+        );
+      }
+      this.candidateCounts.set(key, count);
+    }
+
+    timestamps.push(now);
+    this.writeTimestamps.set(key, timestamps);
+    this.touchRoom(roomId, now);
+  }
+
+  cleanStaleRoom(roomId: string, maxAgeMs = MAX_STALE_ROOM_AGE_MS): boolean {
+    if (this.isRoomStale(roomId, maxAgeMs)) {
+      this.participants.delete(roomId);
+      this.offers.delete(roomId);
+      this.answers.delete(roomId);
+      this.candidates.delete(roomId);
+      this.roomActivity.delete(roomId);
+      this.staleRooms.add(roomId);
+      this.broadcastParticipants(roomId);
+      return true;
+    }
+    return false;
+  }
+
+  resetRateLimits(): void {
+    this.writeTimestamps.clear();
+    this.candidateCounts.clear();
+  }
+
+  resetMinuteLimits(): void {
+    this.writeTimestamps.clear();
   }
 
   private getChannelKey(type: string, roomId: string, extra = ""): string {
@@ -222,6 +336,10 @@ class MemorySignalingBus {
     this.listeners.clear();
     this.authorizedRooms.clear();
     this.strictAuthorization = false;
+    this.roomActivity.clear();
+    this.staleRooms.clear();
+    this.writeTimestamps.clear();
+    this.candidateCounts.clear();
   }
 }
 
@@ -240,6 +358,70 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
       return false;
     }
     return Boolean(rtdb);
+  }
+
+  /**
+   * Validates SDP and ICE candidate payload sizes.
+   * Does NOT log or leak payload contents.
+   */
+  public validatePayloadSize(payload: unknown, type: "offer" | "answer" | "candidate"): void {
+    if (!payload || typeof payload !== "object") {
+      throw new SignalingSecurityError("Signaling payload must be a non-null object.", "PAYLOAD_TOO_LARGE");
+    }
+
+    if (type === "offer" || type === "answer") {
+      const p = payload as { sdp?: unknown };
+      let sdpLength = 0;
+      if (typeof p.sdp === "string") {
+        sdpLength = p.sdp.length;
+      } else if (typeof p.sdp === "object" && p.sdp !== null && "sdp" in p.sdp) {
+        sdpLength = String((p.sdp as { sdp: unknown }).sdp || "").length;
+      } else {
+        throw new SignalingSecurityError("SDP session description is missing or invalid.", "PAYLOAD_TOO_LARGE");
+      }
+
+      if (sdpLength > MAX_SDP_PAYLOAD_CHARS) {
+        throw new SignalingSecurityError(
+          `SDP payload size exceeds maximum allowed limit of ${MAX_SDP_PAYLOAD_CHARS} characters.`,
+          "PAYLOAD_TOO_LARGE"
+        );
+      }
+    } else if (type === "candidate") {
+      const c = payload as { candidate?: unknown };
+      let candLength = 0;
+      if (typeof c.candidate === "string") {
+        candLength = c.candidate.length;
+      } else if (typeof c.candidate === "object" && c.candidate !== null && "candidate" in c.candidate) {
+        candLength = String((c.candidate as { candidate: unknown }).candidate || "").length;
+      } else {
+        throw new SignalingSecurityError("ICE candidate description is missing or invalid.", "PAYLOAD_TOO_LARGE");
+      }
+
+      if (candLength > MAX_ICE_CANDIDATE_CHARS) {
+        throw new SignalingSecurityError(
+          `ICE candidate payload size exceeds maximum allowed limit of ${MAX_ICE_CANDIDATE_CHARS} characters.`,
+          "PAYLOAD_TOO_LARGE"
+        );
+      }
+    }
+  }
+
+  /**
+   * Validates target recipient in the signaling room.
+   */
+  public verifyRecipient(roomId: string, fromUserId: string, toUserId: string): void {
+    if (!toUserId || typeof toUserId !== "string" || toUserId.trim() === "") {
+      throw new SignalingSecurityError("Target recipient user ID is required.", "WRONG_PARTICIPANT");
+    }
+    if (fromUserId === toUserId) {
+      throw new SignalingSecurityError("Signaling sender and recipient cannot be the same participant.", "WRONG_PARTICIPANT");
+    }
+    if (!memorySignalingBus.isUserAuthorized(roomId, toUserId)) {
+      throw new SignalingSecurityError(
+        `Recipient '${toUserId}' is not an authorized participant in room '${roomId}'.`,
+        "WRONG_PARTICIPANT"
+      );
+    }
   }
 
   /**
@@ -269,6 +451,13 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
     }
     this.verifyIdentity(userId);
 
+    if (memorySignalingBus.isRoomStale(roomId)) {
+      throw new SignalingSecurityError(
+        `Signaling room '${roomId}' is stale or expired. Signaling rejected.`,
+        "STALE_ROOM"
+      );
+    }
+
     if (!memorySignalingBus.isUserAuthorized(roomId, userId)) {
       throw new SignalingSecurityError(
         `User '${userId}' is not authorized to access signaling in room '${roomId}'.`,
@@ -282,6 +471,17 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
    */
   async publishParticipant(roomId: string, participant: WebRtcParticipant): Promise<void> {
     this.verifyRoomAuthorization(roomId, participant.userId);
+
+    const existing = memorySignalingBus.getParticipants(roomId);
+    const existingIds = Object.keys(existing);
+    if (!existingIds.includes(participant.userId) && existingIds.length >= 2) {
+      throw new SignalingSecurityError(
+        `Room '${roomId}' has reached maximum participant capacity (2).`,
+        "UNAUTHORIZED"
+      );
+    }
+
+    memorySignalingBus.checkWriteLimits(roomId, participant.userId, false);
     memorySignalingBus.setParticipant(roomId, participant);
     if (this.hasRtdb()) {
       try {
@@ -302,6 +502,7 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
     updates: Partial<WebRtcParticipant>
   ): Promise<void> {
     this.verifyRoomAuthorization(roomId, userId);
+    memorySignalingBus.checkWriteLimits(roomId, userId, false);
     memorySignalingBus.updateParticipant(roomId, userId, updates);
     if (this.hasRtdb()) {
       try {
@@ -390,9 +591,14 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
 
   /**
    * Sends an SDP offer to a specific peer.
+   * Enforces payload size, recipient validity, and write limits.
    */
   async sendOffer(roomId: string, offer: WebRtcSignalOffer): Promise<void> {
     this.verifyRoomAuthorization(roomId, offer.fromUserId);
+    this.verifyRecipient(roomId, offer.fromUserId, offer.toUserId);
+    this.validatePayloadSize(offer, "offer");
+    memorySignalingBus.checkWriteLimits(roomId, offer.fromUserId, false);
+
     memorySignalingBus.setOffer(roomId, offer);
     if (this.hasRtdb()) {
       try {
@@ -457,9 +663,14 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
 
   /**
    * Sends an SDP answer to the offering peer.
+   * Enforces payload size, recipient validity, and write limits.
    */
   async sendAnswer(roomId: string, answer: WebRtcSignalAnswer): Promise<void> {
     this.verifyRoomAuthorization(roomId, answer.fromUserId);
+    this.verifyRecipient(roomId, answer.fromUserId, answer.toUserId);
+    this.validatePayloadSize(answer, "answer");
+    memorySignalingBus.checkWriteLimits(roomId, answer.fromUserId, false);
+
     memorySignalingBus.setAnswer(roomId, answer);
     if (this.hasRtdb()) {
       try {
@@ -524,9 +735,14 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
 
   /**
    * Pushes a local ICE candidate for the partner.
+   * Enforces payload size, recipient validity, and candidate count limits.
    */
   async sendIceCandidate(roomId: string, candidate: WebRtcSignalCandidate): Promise<void> {
     this.verifyRoomAuthorization(roomId, candidate.fromUserId);
+    this.verifyRecipient(roomId, candidate.fromUserId, candidate.toUserId);
+    this.validatePayloadSize(candidate, "candidate");
+    memorySignalingBus.checkWriteLimits(roomId, candidate.fromUserId, true);
+
     memorySignalingBus.addCandidate(roomId, candidate);
     if (this.hasRtdb()) {
       try {
@@ -609,6 +825,32 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
         console.warn("[Signaling] RTDB clearRoomSignaling fallback:", err);
       }
     }
+  }
+
+  /**
+   * Purges stale signaling data older than maxAgeMs from memory and RTDB.
+   */
+  async cleanStaleRoomSignaling(
+    roomId: string,
+    maxAgeMs = MAX_STALE_ROOM_AGE_MS
+  ): Promise<{ cleaned: boolean }> {
+    if (!roomId || typeof roomId !== "string" || roomId.trim() === "") {
+      throw new SignalingSecurityError("Invalid room ID for WebRTC signaling cleanup.", "INVALID_ROOM");
+    }
+    const isStale = memorySignalingBus.isRoomStale(roomId, maxAgeMs);
+    if (!isStale) {
+      return { cleaned: false };
+    }
+    memorySignalingBus.cleanStaleRoom(roomId, maxAgeMs);
+    if (this.hasRtdb()) {
+      try {
+        const roomRef = ref(rtdb, `webrtc_signaling/${roomId}`);
+        await withTimeout(remove(roomRef));
+      } catch (err) {
+        console.warn("[Signaling] RTDB cleanStaleRoomSignaling fallback:", err);
+      }
+    }
+    return { cleaned: true };
   }
 }
 

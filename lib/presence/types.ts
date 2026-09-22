@@ -32,6 +32,9 @@ export interface UserPresenceRecord {
   colorRole?: "ember" | "sage";
   avatarUrl?: string;
   latencyMs?: number;
+  partnerId?: string;
+  coupleId?: string;
+  authorizedUsers?: Record<string, boolean>;
 }
 
 export type NotificationType =

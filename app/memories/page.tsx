@@ -85,7 +85,7 @@ export default function MemoriesPage() {
         setIsLoading(false);
       },
       (error) => {
-        setErrorMessage("Could not connect to live archive. Showing local memories.");
+        setErrorMessage("Could not connect to couple archive. Database unavailable.");
         setIsLoading(false);
       }
     );
@@ -255,10 +255,16 @@ export default function MemoriesPage() {
             onClick={() => {
               setErrorMessage(null);
               setIsLoading(true);
-              memoryService.getMemories(coupleId).then((m) => {
-                setMemories(m);
-                setIsLoading(false);
-              });
+              memoryService
+                .getMemories(coupleId)
+                .then((m) => {
+                  setMemories(m);
+                  setIsLoading(false);
+                })
+                .catch(() => {
+                  setErrorMessage("Failed to connect to archive. Please try again.");
+                  setIsLoading(false);
+                });
             }}
             className="flex items-center gap-1 px-2.5 py-1 rounded bg-player-one-ember/20 hover:bg-player-one-ember/30 text-player-one-ember font-semibold transition-colors"
           >

@@ -18,7 +18,6 @@ import {
 import { db, storage } from "../client";
 import { handleFirestoreError, OperationType } from "../errors";
 import type { CoupleMemory, CreateMemoryPayload, UpdateMemoryPayload } from "@/lib/memories/types";
-import { getDefaultCoupleMemories } from "@/lib/memories/defaultMemories";
 
 export class MemoryService {
   /**
@@ -49,9 +48,7 @@ export class MemoryService {
         q,
         (snapshot) => {
           if (snapshot.empty) {
-            // Check local fallback or provide defaults for new sanctuary
-            const defaults = this.getLocalFallbackMemories(coupleId);
-            onUpdate(defaults);
+            onUpdate([]);
             return;
           }
 
@@ -67,19 +64,15 @@ export class MemoryService {
           onUpdate(memories);
         },
         (error) => {
-          console.warn("Realtime memories subscription fallback:", error.message);
-          // Fallback to local cache or defaults
-          const fallback = this.getLocalFallbackMemories(coupleId);
-          onUpdate(fallback);
+          console.error("Realtime memories subscription error:", error.message);
           if (onError) onError(error);
         }
       );
 
       return unsubscribe;
     } catch (err) {
-      console.warn("Failed to attach memories listener, falling back:", err);
-      const fallback = this.getLocalFallbackMemories(coupleId);
-      onUpdate(fallback);
+      console.error("Failed to attach memories listener:", err);
+      if (onError && err instanceof Error) onError(err);
       return () => {};
     }
   }
@@ -96,7 +89,7 @@ export class MemoryService {
       const snapshot = await getDocs(q);
 
       if (snapshot.empty) {
-        return this.getLocalFallbackMemories(coupleId);
+        return [];
       }
 
       const memories: CoupleMemory[] = [];
@@ -109,8 +102,7 @@ export class MemoryService {
 
       return memories;
     } catch (error) {
-      console.warn("getMemories falling back to local defaults:", error);
-      return this.getLocalFallbackMemories(coupleId);
+      handleFirestoreError(error, OperationType.LIST, `couples/${coupleId}/memories`);
     }
   }
 
@@ -215,8 +207,7 @@ export class MemoryService {
       const memoryRef = doc(db, "couples", coupleId, "memories", memoryId);
       await setDoc(memoryRef, memoryItem);
     } catch (firestoreErr) {
-      console.warn("Firestore memory write failed, saving to local session:", firestoreErr);
-      this.saveToLocalFallback(coupleId, memoryItem);
+      handleFirestoreError(firestoreErr, OperationType.CREATE, `couples/${coupleId}/memories/${memoryId}`);
     }
 
     return memoryItem;
@@ -254,8 +245,6 @@ export class MemoryService {
     try {
       await updateDoc(memoryRef, updatePayload);
     } catch (firestoreErr) {
-      console.warn("Firestore memory update failed, saving to local session:", firestoreErr);
-      this.updateInLocalFallback(coupleId, memoryId, updatePayload);
       handleFirestoreError(firestoreErr, OperationType.UPDATE, `couples/${coupleId}/memories/${memoryId}`);
     }
   }
@@ -302,8 +291,6 @@ export class MemoryService {
       const memoryRef = doc(db, "couples", coupleId, "memories", memoryId);
       await deleteDoc(memoryRef);
     } catch (error) {
-      console.warn("Could not delete firestore doc, pruning local storage:", error);
-      this.deleteFromLocalFallback(coupleId, memoryId);
       handleFirestoreError(error, OperationType.DELETE, `couples/${coupleId}/memories/${memoryId}`);
     }
   }
@@ -344,65 +331,6 @@ export class MemoryService {
       }).format(date);
     } catch {
       return "Recently";
-    }
-  }
-
-  private getLocalFallbackMemories(coupleId: string): CoupleMemory[] {
-    if (typeof window === "undefined") {
-      return getDefaultCoupleMemories(coupleId);
-    }
-
-    try {
-      const stored = localStorage.getItem(`togetherplay_memories_${coupleId}`);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
-    } catch {
-      // ignore
-    }
-
-    const defaults = getDefaultCoupleMemories(coupleId);
-    try {
-      localStorage.setItem(`togetherplay_memories_${coupleId}`, JSON.stringify(defaults));
-    } catch {
-      // ignore
-    }
-    return defaults;
-  }
-
-  private saveToLocalFallback(coupleId: string, memory: CoupleMemory): void {
-    if (typeof window === "undefined") return;
-    try {
-      const current = this.getLocalFallbackMemories(coupleId);
-      const updated = [memory, ...current.filter((m) => m.id !== memory.id)];
-      localStorage.setItem(`togetherplay_memories_${coupleId}`, JSON.stringify(updated));
-    } catch {
-      // ignore
-    }
-  }
-
-  private updateInLocalFallback(coupleId: string, memoryId: string, updates: Record<string, any>): void {
-    if (typeof window === "undefined") return;
-    try {
-      const current = this.getLocalFallbackMemories(coupleId);
-      const updated = current.map((m) => (m.id === memoryId ? { ...m, ...updates } : m));
-      localStorage.setItem(`togetherplay_memories_${coupleId}`, JSON.stringify(updated));
-    } catch {
-      // ignore
-    }
-  }
-
-  private deleteFromLocalFallback(coupleId: string, memoryId: string): void {
-    if (typeof window === "undefined") return;
-    try {
-      const current = this.getLocalFallbackMemories(coupleId);
-      const updated = current.filter((m) => m.id !== memoryId);
-      localStorage.setItem(`togetherplay_memories_${coupleId}`, JSON.stringify(updated));
-    } catch {
-      // ignore
     }
   }
 }

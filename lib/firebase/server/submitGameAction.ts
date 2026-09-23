@@ -38,6 +38,7 @@ import {
 import { AuthoritativeGameEngine } from "./authoritativeGameEngine";
 import { ActionValidationError, type ActionErrorCode } from "./errors";
 import { getPublicState } from "@/lib/games/gameStateContract";
+import { ARTIFACT_CATALOG } from "@/lib/games/definitions";
 
 if (typeof window !== "undefined") {
   throw new Error("Security Violation: submitGameAction cannot be loaded in client browser bundle.");
@@ -525,15 +526,83 @@ export async function submitGameAction(
   const committedState = txOutcome.state;
 
   if (txOutcome.meta?.isIdempotentDuplicate) {
+    const cached = txOutcome.meta.cachedActionRecord;
+    const finalPayload =
+      (txOutcome.meta.authoritativePayload as Record<string, unknown>) ||
+      cached?.payload;
+
+    // Check if downstream durable persistence needs reconciliation / retry.
+    // If claimCheck was NOT completed, or if Firestore/private-state is missing/desynced,
+    // we must execute the downstream persistence operations now.
+    const needsDurableReconciliation = !claimCheck.isCompleted;
+
+    // 1. Private State Reconciliation (RTDB)
+    if (committedState.gameType === "find_it_first" && committedState.status === "playing") {
+      const currentPrivate = await repo.getPrivateGameState(session.gameId);
+      const targetClue = committedState.data?.targetClue as string | undefined;
+      if (targetClue && (!currentPrivate?.targetId || currentPrivate.targetClue !== targetClue)) {
+        const matched = ARTIFACT_CATALOG.find((a) => a.clue === targetClue);
+        if (matched) {
+          const repairedPrivate: PrivateGameState = {
+            gameId: session.gameId,
+            targetId: matched.id,
+            targetName: matched.name,
+            targetCode: matched.code,
+            targetClue: matched.clue,
+            usedTargetIds: currentPrivate?.usedTargetIds || [matched.id],
+          };
+          await repo.savePrivateGameState(session.gameId, repairedPrivate);
+        }
+      }
+    }
+
+    // 2. Durable Session Projection (Firestore)
+    const projectedSession: GameSession = {
+      ...session,
+      status: committedState.status,
+      winnerId: committedState.winnerId,
+      startedAt: session.startedAt,
+      endedAt: committedState.isFinished
+        ? (session.endedAt || new Date(committedState.serverTimestamp).toISOString())
+        : session.endedAt,
+    };
+
+    if (
+      needsDurableReconciliation ||
+      session.status !== committedState.status ||
+      (committedState.isFinished && !session.endedAt)
+    ) {
+      await repo.saveGameSession(projectedSession);
+    }
+
+    // 3. Durable GameResult Projection (Firestore)
     let existingResult: GameResult | null = null;
     if (committedState.isFinished) {
       existingResult = await repo.getGameResult(`res_${session.gameId}`);
       if (!existingResult) {
         existingResult = await repo.getGameResult(session.gameId);
       }
+      if (!existingResult) {
+        existingResult = AuthoritativeGameEngine.deriveGameResult(
+          projectedSession,
+          committedState,
+          serverTimestamp
+        );
+        await repo.saveGameResult(existingResult);
+      }
     }
 
-    const cached = txOutcome.meta.cachedActionRecord;
+    // 4. Mark action claim as completed
+    if (needsDurableReconciliation) {
+      await repo.completeActionClaim(
+        action.clientActionId,
+        session.gameId,
+        playerId,
+        committedState.version,
+        finalPayload,
+        serverTimestamp
+      );
+    }
 
     return {
       accepted: true,
@@ -544,9 +613,9 @@ export async function submitGameAction(
       eventType: cached?.type || action.type,
       stateVersion: cached?.stateVersion || committedState.version,
       gameState: committedState,
-      gameSession: session,
+      gameSession: projectedSession,
       gameResult: existingResult,
-      payload: (txOutcome.meta.authoritativePayload as Record<string, unknown>) || {
+      payload: finalPayload || {
         idempotent: true,
         originalProcessedAtServer:
           committedState.processedActionIds?.[action.clientActionId] ??
@@ -556,22 +625,23 @@ export async function submitGameAction(
     };
   }
 
-  // Persist durable session to Firestore
-  if (txOutcome.meta?.updatedSession) {
-    await repo.saveGameSession(txOutcome.meta.updatedSession);
-  }
-
-  // Persist private state to isolated secure storage
+  // Primary execution path: Persist downstream components in strict order:
+  // 1. RTDB private state (authoritative secrets)
   if (txOutcome.meta?.updatedPrivateState) {
     await repo.savePrivateGameState(session.gameId, txOutcome.meta.updatedPrivateState);
   }
 
-  // Persist durable gameResult to Firestore
+  // 2. Firestore durable session
+  if (txOutcome.meta?.updatedSession) {
+    await repo.saveGameSession(txOutcome.meta.updatedSession);
+  }
+
+  // 3. Firestore durable gameResult
   if (txOutcome.meta?.gameResult) {
     await repo.saveGameResult(txOutcome.meta.gameResult);
   }
 
-  // Mark durable action claim as completed with authoritative outcome
+  // 4. RTDB complete action claim
   await repo.completeActionClaim(
     action.clientActionId,
     session.gameId,

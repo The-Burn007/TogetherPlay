@@ -324,7 +324,7 @@ describe("Bounded Game Action History & Concurrency Idempotency", () => {
 
       const res = await submitGameAction(
         action,
-        { auth: { uid: action.playerId }, repository, enforceAppCheck: false }
+        { auth: { uid: PLAYER_A }, repository, enforceAppCheck: false }
       );
       expect(res.accepted).toBe(true);
     }
@@ -446,7 +446,7 @@ describe("Bounded Game Action History & Concurrency Idempotency", () => {
     ).rejects.toThrow(ActionValidationError);
 
     // Player A cannot provide a stale version for a new action
-    const staleVersionAction: GameAction = {
+    const staleVersionAction = {
       clientActionId: `act_${GAME_ID}_stale_version`,
       gameId: GAME_ID,
       playerId: PLAYER_A,
@@ -454,7 +454,7 @@ describe("Bounded Game Action History & Concurrency Idempotency", () => {
       payload: {},
       expectedVersion: 3, // Current version is 5
       clientTimestamp: Date.now(),
-    };
+    } as GameAction;
 
     await expect(
       submitGameAction(

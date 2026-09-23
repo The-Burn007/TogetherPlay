@@ -20,8 +20,8 @@ export interface PresenceServiceContract {
   updateUserPresence(userId: string, telemetry: Partial<PartnerTelemetry>): Promise<void>;
   subscribeToPartnerPresence(partnerId: string, callback: (presence: PartnerPresence | null) => void): () => void;
   sendPartnerNudge(targetPartnerId: string, message: string): Promise<boolean>;
-  setPresenceState(userId: string, state: PresenceState, activity?: string, gameId?: string, partnerId?: string): Promise<void>;
-  subscribeToUserPresence(userId: string, callback: (record: UserPresenceRecord | null) => void): () => void;
+  setPresenceState(userId: string, state: PresenceState, activity?: string, gameId?: string, partnerId?: string, coupleId?: string): Promise<void>;
+  subscribeToUserPresence(userId: string, callback: (record: UserPresenceRecord | null) => void, coupleId?: string): () => void;
   initializePresenceLifecycle(
     userId: string,
     metadata: {
@@ -39,13 +39,22 @@ export class FirebasePresenceService implements PresenceServiceContract {
   private memoryPresence: Map<string, UserPresenceRecord> = new Map();
   // CLASSIFICATION: UI state (Component listener callback sets)
   private subscribers: Map<string, Set<(record: UserPresenceRecord | null) => void>> = new Map();
+  // Authoritative couple membership lookup
+  private userCouples: Map<string, string> = new Map();
+  private coupleMembers: Map<string, Set<string>> = new Map();
 
   constructor() {
+    this.registerCoupleMembership("cpl_tokyo_london_4209", [
+      "user_sam",
+      "user_alex",
+      "partner_sam",
+    ]);
+
     // Seed default baseline for Tokyo partner (Sam) and London partner (Alex)
     this.seedBaselinePresence("partner_sam", {
       userId: "partner_sam",
       partnerId: "user_alex",
-      authorizedUsers: { partner_sam: true, user_alex: true },
+      coupleId: "cpl_tokyo_london_4209",
       displayName: "Sam",
       state: "ONLINE",
       connectionStatus: "online",
@@ -60,7 +69,7 @@ export class FirebasePresenceService implements PresenceServiceContract {
     this.seedBaselinePresence("user_sam", {
       userId: "user_sam",
       partnerId: "user_alex",
-      authorizedUsers: { user_sam: true, user_alex: true },
+      coupleId: "cpl_tokyo_london_4209",
       displayName: "Sam",
       state: "ONLINE",
       connectionStatus: "online",
@@ -75,7 +84,7 @@ export class FirebasePresenceService implements PresenceServiceContract {
     this.seedBaselinePresence("user_alex", {
       userId: "user_alex",
       partnerId: "user_sam",
-      authorizedUsers: { user_sam: true, user_alex: true },
+      coupleId: "cpl_tokyo_london_4209",
       displayName: "Alex",
       state: "ONLINE",
       connectionStatus: "online",
@@ -86,6 +95,34 @@ export class FirebasePresenceService implements PresenceServiceContract {
       colorRole: "ember",
       latencyMs: 24,
     });
+  }
+
+  registerCoupleMembership(coupleId: string, memberIds: string[]): void {
+    if (!this.coupleMembers.has(coupleId)) {
+      this.coupleMembers.set(coupleId, new Set());
+    }
+    const set = this.coupleMembers.get(coupleId)!;
+    memberIds.forEach((uid) => {
+      set.add(uid);
+      this.userCouples.set(uid, coupleId);
+    });
+  }
+
+  getEffectiveCoupleId(userId: string, explicitCoupleId?: string): string {
+    if (explicitCoupleId) {
+      this.userCouples.set(userId, explicitCoupleId);
+      if (!this.coupleMembers.has(explicitCoupleId)) {
+        this.coupleMembers.set(explicitCoupleId, new Set());
+      }
+      this.coupleMembers.get(explicitCoupleId)!.add(userId);
+      return explicitCoupleId;
+    }
+    const cached = this.userCouples.get(userId);
+    if (cached) return cached;
+    if (userId.includes("sam") || userId.includes("alex")) {
+      return "cpl_tokyo_london_4209";
+    }
+    return `cpl_${userId}`;
   }
 
   private seedBaselinePresence(id: string, record: UserPresenceRecord) {
@@ -138,7 +175,7 @@ export class FirebasePresenceService implements PresenceServiceContract {
         if (auth?.currentUser && auth.currentUser.uid !== userId) {
           return;
         }
-        const effectivePartnerId = updated.partnerId || (userId === "user_sam" ? "user_alex" : userId === "user_alex" ? "user_sam" : undefined);
+        const effectiveCoupleId = this.getEffectiveCoupleId(userId);
         const presenceUpdate: Record<string, unknown> = {
           userId,
           state: updated.state,
@@ -146,14 +183,7 @@ export class FirebasePresenceService implements PresenceServiceContract {
           currentActivity: updated.currentActivity || "",
           lastSeenMs: serverTimestamp(),
         };
-        if (effectivePartnerId && effectivePartnerId !== userId) {
-          presenceUpdate.partnerId = effectivePartnerId;
-          presenceUpdate.authorizedUsers = {
-            [userId]: true,
-            [effectivePartnerId]: true,
-          };
-        }
-        await update(ref(rtdb, `presence/${userId}`), presenceUpdate);
+        await update(ref(rtdb, `presence/${effectiveCoupleId}/${userId}`), presenceUpdate);
       }
     } catch {
       // Offline fallback
@@ -217,9 +247,11 @@ export class FirebasePresenceService implements PresenceServiceContract {
     state: PresenceState,
     activity?: string,
     gameId?: string,
-    partnerId?: string
+    partnerId?: string,
+    coupleId?: string
   ): Promise<void> {
     const existing = this.memoryPresence.get(userId);
+    const effectiveCoupleId = this.getEffectiveCoupleId(userId, coupleId || existing?.coupleId);
     const effectivePartnerId =
       partnerId ||
       existing?.partnerId ||
@@ -236,10 +268,7 @@ export class FirebasePresenceService implements PresenceServiceContract {
       city: existing?.city || (userId.includes("sam") ? "Tokyo" : "London"),
       colorRole: existing?.colorRole || (userId.includes("sam") ? "sage" : "ember"),
       partnerId: effectivePartnerId,
-      authorizedUsers: effectivePartnerId
-        ? { [userId]: true, [effectivePartnerId]: true }
-        : existing?.authorizedUsers,
-      coupleId: existing?.coupleId,
+      coupleId: effectiveCoupleId,
     };
 
     this.memoryPresence.set(userId, updated);
@@ -251,7 +280,7 @@ export class FirebasePresenceService implements PresenceServiceContract {
         if (auth?.currentUser && auth.currentUser.uid !== userId) {
           return;
         }
-        const presenceRef = ref(rtdb, `presence/${userId}`);
+        const presenceRef = ref(rtdb, `presence/${effectiveCoupleId}/${userId}`);
         const updatePayload: Record<string, unknown> = {
           userId,
           state,
@@ -260,16 +289,6 @@ export class FirebasePresenceService implements PresenceServiceContract {
           gameId: updated.gameId || null,
           lastSeenMs: serverTimestamp(),
         };
-        if (effectivePartnerId && effectivePartnerId !== userId) {
-          updatePayload.partnerId = effectivePartnerId;
-          updatePayload.authorizedUsers = {
-            [userId]: true,
-            [effectivePartnerId]: true,
-          };
-        }
-        if (updated.coupleId) {
-          updatePayload.coupleId = updated.coupleId;
-        }
         await update(presenceRef, updatePayload);
       }
     } catch {
@@ -299,7 +318,8 @@ export class FirebasePresenceService implements PresenceServiceContract {
 
   subscribeToUserPresence(
     userId: string,
-    callback: (record: UserPresenceRecord | null) => void
+    callback: (record: UserPresenceRecord | null) => void,
+    coupleId?: string
   ): () => void {
     if (!this.subscribers.has(userId)) {
       this.subscribers.set(userId, new Set());
@@ -308,14 +328,23 @@ export class FirebasePresenceService implements PresenceServiceContract {
 
     const initial = this.memoryPresence.get(userId) || null;
     const currentUid = auth?.currentUser?.uid;
+    const effectiveCoupleId = this.getEffectiveCoupleId(userId, coupleId || initial?.coupleId);
 
-    // Check privacy authorization before emitting initial memory cache
-    const isAuthorized =
-      !currentUid ||
-      currentUid === userId ||
-      (initial && initial.partnerId === currentUid) ||
-      (initial && initial.authorizedUsers && initial.authorizedUsers[currentUid]) ||
-      ((currentUid === "user_sam" || currentUid === "user_alex") && (userId === "user_sam" || userId === "user_alex"));
+    // Enforce couple membership privacy authorization:
+    // Only self or authoritative couple member can read presence
+    let isAuthorized = !currentUid || currentUid === userId;
+    if (!isAuthorized && currentUid) {
+      const members = this.coupleMembers.get(effectiveCoupleId);
+      if (members && members.has(currentUid) && members.has(userId)) {
+        isAuthorized = true;
+      } else if (
+        effectiveCoupleId === "cpl_tokyo_london_4209" &&
+        (currentUid === "user_sam" || currentUid === "user_alex") &&
+        (userId === "user_sam" || userId === "user_alex")
+      ) {
+        isAuthorized = true;
+      }
+    }
 
     if (isAuthorized) {
       callback(initial);
@@ -326,8 +355,8 @@ export class FirebasePresenceService implements PresenceServiceContract {
     // RTDB listener
     let rtdbUnsub: (() => void) | null = null;
     try {
-      if (rtdb && userId) {
-        const presenceRef = ref(rtdb, `presence/${userId}`);
+      if (rtdb && userId && isAuthorized) {
+        const presenceRef = ref(rtdb, `presence/${effectiveCoupleId}/${userId}`);
         rtdbUnsub = onValue(
           presenceRef,
           (snapshot) => {
@@ -347,8 +376,7 @@ export class FirebasePresenceService implements PresenceServiceContract {
                 colorRole: val.colorRole || (userId.includes("sam") ? "sage" : "ember"),
                 latencyMs: val.latencyMs || 28,
                 partnerId: val.partnerId,
-                coupleId: val.coupleId,
-                authorizedUsers: val.authorizedUsers,
+                coupleId: effectiveCoupleId,
               };
               this.memoryPresence.set(userId, record);
               callback(record);
@@ -388,6 +416,7 @@ export class FirebasePresenceService implements PresenceServiceContract {
       return () => {};
     }
 
+    const effectiveCoupleId = this.getEffectiveCoupleId(userId, metadata.coupleId);
     const effectivePartnerId =
       metadata.partnerId ||
       (userId === "user_sam" ? "user_alex" : userId === "user_alex" ? "user_sam" : undefined);
@@ -404,14 +433,8 @@ export class FirebasePresenceService implements PresenceServiceContract {
 
     if (effectivePartnerId) {
       existing.partnerId = effectivePartnerId;
-      existing.authorizedUsers = {
-        [userId]: true,
-        [effectivePartnerId]: true,
-      };
     }
-    if (metadata.coupleId) {
-      existing.coupleId = metadata.coupleId;
-    }
+    existing.coupleId = effectiveCoupleId;
     this.memoryPresence.set(userId, existing);
 
     let connectedUnsub: (() => void) | null = null;
@@ -424,7 +447,7 @@ export class FirebasePresenceService implements PresenceServiceContract {
         }
 
         const connectedRef = ref(rtdb, ".info/connected");
-        const presenceRef = ref(rtdb, `presence/${userId}`);
+        const presenceRef = ref(rtdb, `presence/${effectiveCoupleId}/${userId}`);
 
         connectedUnsub = onValue(connectedRef, async (snapshot) => {
           if (snapshot.val() === true) {
@@ -448,18 +471,6 @@ export class FirebasePresenceService implements PresenceServiceContract {
                 lastSeenMs: serverTimestamp(),
               };
 
-              if (effectivePartnerId && effectivePartnerId !== userId) {
-                onlinePayload.partnerId = effectivePartnerId;
-                onlinePayload.authorizedUsers = {
-                  [userId]: true,
-                  [effectivePartnerId]: true,
-                };
-              }
-
-              if (metadata.coupleId) {
-                onlinePayload.coupleId = metadata.coupleId;
-              }
-
               await update(presenceRef, onlinePayload);
             } catch {
               // Silently handle disconnection handler setup
@@ -482,7 +493,7 @@ export class FirebasePresenceService implements PresenceServiceContract {
           if (auth?.currentUser && auth.currentUser.uid !== userId) {
             return;
           }
-          const presenceRef = ref(rtdb, `presence/${userId}`);
+          const presenceRef = ref(rtdb, `presence/${effectiveCoupleId}/${userId}`);
           update(presenceRef, {
             state: "OFFLINE",
             connectionStatus: "offline",

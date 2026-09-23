@@ -17,9 +17,20 @@ export class FirebaseNotificationService {
   private localNotifications: PartnerNotification[] = [];
   private settingsSubscribers: Set<(settings: NotificationSettings) => void> = new Set();
   private currentSettings: NotificationSettings = DEFAULT_NOTIFICATION_SETTINGS;
+  private currentCoupleId: string = "cpl_tokyo_london_4209";
 
   constructor() {
     this.currentSettings = this.loadStoredSettings();
+  }
+
+  setCoupleId(coupleId: string): void {
+    if (coupleId) {
+      this.currentCoupleId = coupleId;
+    }
+  }
+
+  getCoupleId(): string {
+    return this.currentCoupleId;
   }
 
   // --------------------------------------------------------------------------
@@ -103,8 +114,10 @@ export class FirebaseNotificationService {
     this.recentSentMap.set(dedupeKey, now);
 
     const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const coupleId = notification.coupleId || this.currentCoupleId;
     const fullNotification: PartnerNotification = {
       ...notification,
+      coupleId,
       id: notificationId,
       createdAt: now,
       read: false,
@@ -140,6 +153,7 @@ export class FirebaseNotificationService {
     toUserId: string;
     gameId: string;
     gameTitle: string;
+    coupleId?: string;
   }): Promise<boolean> {
     return this.sendNotification({
       type: "partner_invited",
@@ -149,6 +163,7 @@ export class FirebaseNotificationService {
       fromName: params.fromName,
       toUserId: params.toUserId,
       gameId: params.gameId,
+      coupleId: params.coupleId || this.currentCoupleId,
       actionHref: `/play/lobby?game=${params.gameId}`,
       actionLabel: "Join Game Lobby",
     });
@@ -161,6 +176,7 @@ export class FirebaseNotificationService {
     toUserId: string;
     gameId: string;
     gameTitle: string;
+    coupleId?: string;
   }): Promise<boolean> {
     return this.sendNotification({
       type: "game_started",
@@ -170,6 +186,7 @@ export class FirebaseNotificationService {
       fromName: params.fromName,
       toUserId: params.toUserId,
       gameId: params.gameId,
+      coupleId: params.coupleId || this.currentCoupleId,
       actionHref: `/play/${params.gameId.replace(/_/g, "-")}`,
       actionLabel: "Enter Game",
     });
@@ -182,6 +199,7 @@ export class FirebaseNotificationService {
     toUserId: string;
     challengeTitle: string;
     challengeId?: string;
+    coupleId?: string;
   }): Promise<boolean> {
     return this.sendNotification({
       type: "challenge_sent",
@@ -190,6 +208,7 @@ export class FirebaseNotificationService {
       fromUserId: params.fromUserId,
       fromName: params.fromName,
       toUserId: params.toUserId,
+      coupleId: params.coupleId || this.currentCoupleId,
       actionHref: `/play/ai-challenge`,
       actionLabel: "Accept Challenge",
       metadata: { challengeId: params.challengeId },
@@ -203,6 +222,7 @@ export class FirebaseNotificationService {
     toUserId: string;
     momentTitle: string;
     momentId?: string;
+    coupleId?: string;
   }): Promise<boolean> {
     return this.sendNotification({
       type: "daily_moment",
@@ -211,6 +231,7 @@ export class FirebaseNotificationService {
       fromUserId: params.fromUserId,
       fromName: params.fromName,
       toUserId: params.toUserId,
+      coupleId: params.coupleId || this.currentCoupleId,
       actionHref: `/moments`,
       actionLabel: "View Daily Moment",
       metadata: { momentId: params.momentId },
@@ -224,6 +245,7 @@ export class FirebaseNotificationService {
     toUserId: string;
     gameId: string;
     gameTitle: string;
+    coupleId?: string;
   }): Promise<boolean> {
     return this.sendNotification({
       type: "rematch_requested",
@@ -233,6 +255,7 @@ export class FirebaseNotificationService {
       fromName: params.fromName,
       toUserId: params.toUserId,
       gameId: params.gameId,
+      coupleId: params.coupleId || this.currentCoupleId,
       actionHref: `/play/${params.gameId.replace(/_/g, "-")}`,
       actionLabel: "Play Rematch",
     });
@@ -350,6 +373,7 @@ export class FirebaseNotificationService {
         fromUserId: partnerId,
         fromName: partnerName,
         toUserId: userId,
+        coupleId: "cpl_tokyo_london_4209",
         createdAt: Date.now() - 4 * 60 * 1000,
         read: false,
         actionHref: "/play/lobby?game=find_it_first",
@@ -364,6 +388,7 @@ export class FirebaseNotificationService {
         fromUserId: partnerId,
         fromName: partnerName,
         toUserId: userId,
+        coupleId: "cpl_tokyo_london_4209",
         createdAt: Date.now() - 25 * 60 * 1000,
         read: false,
         actionHref: "/moments",
@@ -377,6 +402,7 @@ export class FirebaseNotificationService {
         fromUserId: partnerId,
         fromName: partnerName,
         toUserId: userId,
+        coupleId: "cpl_tokyo_london_4209",
         createdAt: Date.now() - 90 * 60 * 1000,
         read: true,
         actionHref: "/play/ai-challenge",

@@ -773,17 +773,44 @@ export class AuthoritativeGameEngine {
       case "SUBMIT_ANSWER": {
         const rawPayload = (action.payload && typeof action.payload === "object" ? action.payload : {}) as Record<string, unknown>;
         const choice = String(rawPayload.cellId || rawPayload.choice || "");
-        const serverTarget = String(
+        let serverTarget = String(
           currentPrivateState?.targetId ||
           nextState.data.targetId ||
           nextState.data.targetAnswer ||
-          "CORRECT_ANSWER"
+          ""
         );
-        const serverTargetName = String(
+        let serverTargetName = String(
           currentPrivateState?.targetName ||
           nextState.data.targetName ||
-          "Antique Artifact"
+          ""
         );
+
+        // Self-healing / reconciliation: If private target is missing (e.g. following a recovery/reconciliation or persistence retry)
+        // but public targetClue exists in state.data, recover target from catalog
+        if (!serverTarget && nextState.data?.targetClue) {
+          const matched = ARTIFACT_CATALOG.find((a) => a.clue === nextState.data.targetClue);
+          if (matched) {
+            serverTarget = matched.id;
+            serverTargetName = matched.name;
+            if (!updatedPrivateState) {
+              updatedPrivateState = {
+                gameId: session.gameId,
+                targetId: matched.id,
+                targetName: matched.name,
+                targetCode: matched.code,
+                targetClue: matched.clue,
+                usedTargetIds: currentPrivateState?.usedTargetIds || [matched.id],
+              };
+            }
+          }
+        }
+
+        if (!serverTarget) {
+          serverTarget = "CORRECT_ANSWER";
+        }
+        if (!serverTargetName) {
+          serverTargetName = "Antique Artifact";
+        }
 
         // If private state was not previously initialized (e.g. seeded state), migrate to private state
         if (!updatedPrivateState && (nextState.data.targetId || nextState.data.targetAnswer)) {
@@ -1900,6 +1927,61 @@ export class AuthoritativeGameEngine {
   }
 
   /**
+   * Derives durable GameResult representation deterministically from GameSession and GameState.
+   * Does not mutate session or state.
+   */
+  public static deriveGameResult(
+    session: GameSession,
+    state: GameState,
+    serverTimestamp: number = Date.now()
+  ): GameResult {
+    const scores = state.scores;
+    const playerIds = session.playerIds;
+    let highestScore = -Infinity;
+    let winnerId: string | null = state.winnerId ?? null;
+    let isTie = false;
+
+    if (winnerId === undefined || winnerId === null) {
+      for (const pid of playerIds) {
+        const score = scores[pid] || 0;
+        if (score > highestScore) {
+          highestScore = score;
+          winnerId = pid;
+          isTie = false;
+        } else if (score === highestScore) {
+          isTie = true;
+        }
+      }
+      if (isTie) {
+        winnerId = null;
+      }
+    }
+
+    const startedTime = session.startedAt ? new Date(session.startedAt).getTime() : new Date(session.createdAt).getTime();
+    const durationSeconds = Math.max(1, Math.round((serverTimestamp - startedTime) / 1000));
+
+    return {
+      resultId: `res_${session.gameId}`,
+      gameId: session.gameId,
+      coupleId: session.coupleId,
+      gameType: session.gameType,
+      playerIds: session.playerIds,
+      winnerId,
+      finalScores: { ...state.scores },
+      totalRounds: state.currentRound,
+      durationSeconds,
+      startedAt: session.startedAt || session.createdAt,
+      completedAt: session.endedAt || new Date(serverTimestamp).toISOString(),
+      serverTimestamp,
+      summary: {
+        winnerId,
+        finalScores: { ...state.scores },
+        isTie: winnerId === null,
+      },
+    };
+  }
+
+  /**
    * Finalizes the game authoritatively:
    * - Evaluates winner purely from server scores
    * - Sets session status to "game_end"
@@ -1940,29 +2022,6 @@ export class AuthoritativeGameEngine {
     session.winnerId = winnerId;
     session.endedAt = new Date(serverTimestamp).toISOString();
 
-    const startedTime = session.startedAt ? new Date(session.startedAt).getTime() : new Date(session.createdAt).getTime();
-    const durationSeconds = Math.max(1, Math.round((serverTimestamp - startedTime) / 1000));
-
-    const result: GameResult = {
-      resultId: `res_${session.gameId}_${Date.now()}`,
-      gameId: session.gameId,
-      coupleId: session.coupleId,
-      gameType: session.gameType,
-      playerIds: session.playerIds,
-      winnerId,
-      finalScores: { ...state.scores },
-      totalRounds: state.currentRound,
-      durationSeconds,
-      startedAt: session.startedAt || session.createdAt,
-      completedAt: new Date(serverTimestamp).toISOString(),
-      serverTimestamp,
-      summary: {
-        winnerId,
-        finalScores: { ...state.scores },
-        isTie,
-      },
-    };
-
-    return result;
+    return AuthoritativeGameEngine.deriveGameResult(session, state, serverTimestamp);
   }
 }

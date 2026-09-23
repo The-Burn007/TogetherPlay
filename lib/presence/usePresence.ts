@@ -93,31 +93,46 @@ export function usePresence(): UsePresenceReturn {
 
   // Subscribe to partner presence
   useEffect(() => {
-    const unsub = presenceService.subscribeToUserPresence(partnerUserId, (record) => {
-      setPartnerPresence(record);
-    });
+    const unsub = presenceService.subscribeToUserPresence(
+      partnerUserId,
+      (record) => {
+        setPartnerPresence(record);
+      },
+      coupleId || undefined
+    );
 
     return () => {
       unsub();
     };
-  }, [partnerUserId]);
+  }, [partnerUserId, coupleId]);
 
   // Subscribe to self presence
   useEffect(() => {
-    const unsub = presenceService.subscribeToUserPresence(myUserId, (record) => {
-      setMyPresence(record);
-    });
+    const unsub = presenceService.subscribeToUserPresence(
+      myUserId,
+      (record) => {
+        setMyPresence(record);
+      },
+      coupleId || undefined
+    );
 
     return () => {
       unsub();
     };
-  }, [myUserId]);
+  }, [myUserId, coupleId]);
 
   const setMyState = useCallback(
     async (state: PresenceState, activity?: string, gameId?: string) => {
-      await presenceService.setPresenceState(myUserId, state, activity, gameId, partnerUserId);
+      await presenceService.setPresenceState(
+        myUserId,
+        state,
+        activity,
+        gameId,
+        partnerUserId,
+        coupleId || undefined
+      );
     },
-    [myUserId, partnerUserId]
+    [myUserId, partnerUserId, coupleId]
   );
 
   const setSimulatedPartnerState = useCallback(

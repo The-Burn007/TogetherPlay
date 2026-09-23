@@ -109,6 +109,28 @@ class InMemoryAuditGameRepository implements GameRepositoryContract {
     return (this.results.get(resultId) as GameResult) || null;
   }
 
+  async completeActionClaim(
+    clientActionId: string,
+    gameId: string,
+    playerId: string,
+    stateVersion: number,
+    resultPayload?: unknown,
+    timestamp?: number
+  ): Promise<void> {
+    const existing = this.actionClaims.get(clientActionId);
+    if (existing) {
+      this.actionClaims.set(clientActionId, {
+        gameId,
+        playerId,
+        timestamp: timestamp || Date.now(),
+      });
+    }
+  }
+
+  async cleanupExpiredActionClaims(): Promise<{ cleanedCount: number }> {
+    return { cleanedCount: 0 };
+  }
+
   async getActionClaim(): Promise<null> { return null; }
   async getGameAggregate(gameId: string) {
     const session = await this.getGameSession(gameId);

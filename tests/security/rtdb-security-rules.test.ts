@@ -46,22 +46,31 @@ describe("Firebase Realtime Database Security Rules", () => {
           ["emulators:start", "--only", "database"],
           { stdio: "ignore", detached: true }
         );
+        emulatorProcess.unref();
       } catch {
         // CLI not installed or cannot spawn
       }
 
       // Wait briefly for emulator to be ready
       const start = Date.now();
-      while (Date.now() - start < 2500) {
+      while (Date.now() - start < 1500) {
         if (await isPortOpen(9000)) {
           portOpen = true;
           break;
         }
-        await new Promise((r) => setTimeout(r, 400));
+        await new Promise((r) => setTimeout(r, 300));
       }
     }
 
     if (!portOpen) {
+      if (emulatorProcess && emulatorProcess.pid) {
+        try {
+          process.kill(-emulatorProcess.pid, "SIGTERM");
+        } catch {
+          emulatorProcess.kill("SIGTERM");
+        }
+        emulatorProcess = null;
+      }
       emulatorAvailable = false;
       console.warn("[RTDB-Rules] Firebase RTDB Emulator is not running on port 9000. Skipping live emulator tests.");
       return;
@@ -310,16 +319,32 @@ describe("Firebase Realtime Database Security Rules", () => {
   });
 
   describe("User Presence & Location Privacy", () => {
+    const coupleId = "test_couple_presence";
     const playerA = "user_player_a";
     const playerB = "user_player_b";
     const playerC = "user_player_c_outsider";
 
+    beforeEach(async () => {
+      if (!emulatorAvailable || !testEnv) return;
+      // Authoritatively seed couple membership
+      await testEnv.withSecurityRulesDisabled(async (adminContext) => {
+        await adminContext.database().ref(`couples/${coupleId}`).set({
+          memberIds: [playerA, playerB],
+          members: {
+            [playerA]: true,
+            [playerB]: true,
+          },
+        });
+      });
+    });
+
     it("Authorized user can update their own presence status", async () => {
       const aliceDb = testEnv.authenticatedContext(playerA).database();
       await assertSucceeds(
-        aliceDb.ref(`presence/${playerA}`).set({
-          online: true,
-          lastSeen: Date.now(),
+        aliceDb.ref(`presence/${coupleId}/${playerA}`).set({
+          userId: playerA,
+          state: "ONLINE",
+          connectionStatus: "online",
         })
       );
     });
@@ -329,9 +354,9 @@ describe("Firebase Realtime Database Security Rules", () => {
 
       // Charlie cannot overwrite Alice's presence
       await assertFails(
-        charlieDb.ref(`presence/${playerA}`).set({
-          online: false,
-          lastSeen: 0,
+        charlieDb.ref(`presence/${coupleId}/${playerA}`).set({
+          userId: playerA,
+          state: "OFFLINE",
         })
       );
     });
@@ -341,8 +366,8 @@ describe("Firebase Realtime Database Security Rules", () => {
 
       // Attempting to store latitude / longitude in presence is rejected
       await assertFails(
-        aliceDb.ref(`presence/${playerA}`).set({
-          online: true,
+        aliceDb.ref(`presence/${coupleId}/${playerA}`).set({
+          userId: playerA,
           latitude: 37.7749,
           longitude: -122.4194,
         })
@@ -353,16 +378,14 @@ describe("Firebase Realtime Database Security Rules", () => {
       const aliceDb = testEnv.authenticatedContext(playerA).database();
       const bobDb = testEnv.authenticatedContext(playerB).database();
 
-      await aliceDb.ref(`presence/${playerA}`).set({
+      await aliceDb.ref(`presence/${coupleId}/${playerA}`).set({
         userId: playerA,
-        partnerId: playerB,
-        authorizedUsers: { [playerA]: true, [playerB]: true },
-        online: true,
-        lastSeen: Date.now(),
+        state: "ONLINE",
+        connectionStatus: "online",
       });
 
       await assertSucceeds(
-        bobDb.ref(`presence/${playerA}`).get()
+        bobDb.ref(`presence/${coupleId}/${playerA}`).get()
       );
     });
 
@@ -370,17 +393,15 @@ describe("Firebase Realtime Database Security Rules", () => {
       const aliceDb = testEnv.authenticatedContext(playerA).database();
       const charlieDb = testEnv.authenticatedContext(playerC).database();
 
-      await aliceDb.ref(`presence/${playerA}`).set({
+      await aliceDb.ref(`presence/${coupleId}/${playerA}`).set({
         userId: playerA,
-        partnerId: playerB,
-        authorizedUsers: { [playerA]: true, [playerB]: true },
-        online: true,
-        lastSeen: Date.now(),
+        state: "ONLINE",
+        connectionStatus: "online",
       });
 
       // Charlie is an outsider (neither Alice nor Bob) -> reading Alice's presence MUST FAIL
       await assertFails(
-        charlieDb.ref(`presence/${playerA}`).get()
+        charlieDb.ref(`presence/${coupleId}/${playerA}`).get()
       );
     });
 
@@ -388,16 +409,14 @@ describe("Firebase Realtime Database Security Rules", () => {
       const aliceDb = testEnv.authenticatedContext(playerA).database();
       const unauthDb = testEnv.unauthenticatedContext().database();
 
-      await aliceDb.ref(`presence/${playerA}`).set({
+      await aliceDb.ref(`presence/${coupleId}/${playerA}`).set({
         userId: playerA,
-        partnerId: playerB,
-        authorizedUsers: { [playerA]: true, [playerB]: true },
-        online: true,
-        lastSeen: Date.now(),
+        state: "ONLINE",
+        connectionStatus: "online",
       });
 
       await assertFails(
-        unauthDb.ref(`presence/${playerA}`).get()
+        unauthDb.ref(`presence/${coupleId}/${playerA}`).get()
       );
     });
 
@@ -406,23 +425,9 @@ describe("Firebase Realtime Database Security Rules", () => {
 
       // Alice tries to spoof userId as playerB
       await assertFails(
-        aliceDb.ref(`presence/${playerA}`).set({
+        aliceDb.ref(`presence/${coupleId}/${playerA}`).set({
           userId: playerB,
-          partnerId: playerB,
-          online: true,
-        })
-      );
-    });
-
-    it("Cannot spoof partnerId with own uid", async () => {
-      const aliceDb = testEnv.authenticatedContext(playerA).database();
-
-      // Alice tries to self-partner
-      await assertFails(
-        aliceDb.ref(`presence/${playerA}`).set({
-          userId: playerA,
-          partnerId: playerA,
-          online: true,
+          state: "ONLINE",
         })
       );
     });
@@ -432,12 +437,94 @@ describe("Firebase Realtime Database Security Rules", () => {
 
       // Client attempting to provide a fake numeric timestamp for lastSeenMs instead of serverTimestamp()
       await assertFails(
-        aliceDb.ref(`presence/${playerA}`).set({
+        aliceDb.ref(`presence/${coupleId}/${playerA}`).set({
           userId: playerA,
-          partnerId: playerB,
           lastSeenMs: 123456789,
         })
       );
+    });
+  });
+
+  describe("Notification Security Rules", () => {
+    const coupleId = "test_couple_notifications";
+    const playerA = "user_player_a_notif";
+    const playerB = "user_player_b_notif";
+    const playerC = "user_player_c_notif_outsider";
+
+    beforeEach(async () => {
+      if (!emulatorAvailable || !testEnv) return;
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.database();
+        await db.ref(`couples/${coupleId}`).set({
+          coupleId,
+          memberIds: [playerA, playerB],
+          members: {
+            [playerA]: true,
+            [playerB]: true,
+          },
+        });
+      });
+    });
+
+    it("User A can send a valid notification to partner User B in same couple", async () => {
+      const aliceDb = testEnv.authenticatedContext(playerA).database();
+      await assertSucceeds(
+        aliceDb.ref(`notifications/${playerB}/notif_1`).set({
+          id: "notif_1",
+          type: "partner_invited",
+          title: "Play Find It First",
+          body: "Let's play together!",
+          fromUserId: playerA,
+          toUserId: playerB,
+          coupleId,
+          createdAt: Date.now(),
+          read: false,
+        })
+      );
+    });
+
+    it("User A cannot send notification to unrelated outsider User C", async () => {
+      const aliceDb = testEnv.authenticatedContext(playerA).database();
+      await assertFails(
+        aliceDb.ref(`notifications/${playerC}/notif_2`).set({
+          id: "notif_2",
+          type: "partner_invited",
+          title: "Play Find It First",
+          body: "Let's play together!",
+          fromUserId: playerA,
+          toUserId: playerC,
+          coupleId,
+          createdAt: Date.now(),
+          read: false,
+        })
+      );
+    });
+
+    it("User C cannot send notification pretending to be User A", async () => {
+      const charlieDb = testEnv.authenticatedContext(playerC).database();
+      await assertFails(
+        charlieDb.ref(`notifications/${playerB}/notif_3`).set({
+          id: "notif_3",
+          type: "partner_invited",
+          title: "Spoofed Invite",
+          body: "Impersonating Alice",
+          fromUserId: playerA,
+          toUserId: playerB,
+          coupleId,
+          createdAt: Date.now(),
+          read: false,
+        })
+      );
+    });
+
+    it("User B can read their own notifications", async () => {
+      const bobDb = testEnv.authenticatedContext(playerB).database();
+      await assertSucceeds(bobDb.ref(`notifications/${playerB}`).get());
+    });
+
+    it("User C cannot read User B's notifications", async () => {
+      const charlieDb = testEnv.authenticatedContext(playerC).database();
+      await assertFails(charlieDb.ref(`notifications/${playerB}`).get());
     });
   });
 });

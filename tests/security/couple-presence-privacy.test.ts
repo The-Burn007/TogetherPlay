@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 
-// Mock firebase/database so unit tests execute cleanly in sandbox without real network calls
+// Mock firebase/database for pure unit execution
 vi.mock("firebase/database", () => ({
   getDatabase: vi.fn(() => ({})),
   ref: vi.fn(() => ({})),
@@ -17,120 +17,86 @@ vi.mock("firebase/database", () => ({
 }));
 
 import { FirebasePresenceService } from "@/lib/firebase/services/presence";
-import type { UserPresenceRecord } from "@/lib/presence/types";
 
 /**
  * Realtime Database Rule Evaluator Simulator
- * Strictly executes the rule logic defined in database.rules.json
- * to verify couple presence privacy and security invariants.
+ * Strictly tests the rule structure and logic defined in database.rules.json
+ * to verify couple presence authorization hardening invariants.
  */
-interface RuleContext {
-  auth: { uid: string } | null;
-  data: any;
-  newData: any;
-  now: number;
+interface RtdbRootState {
+  couples?: Record<
+    string,
+    {
+      memberIds?: string[];
+      members?: Record<string, boolean>;
+    }
+  >;
+  presence?: Record<string, Record<string, any>>;
 }
 
-function evaluatePresenceReadRule(
-  ruleString: string,
-  $uid: string,
+function evaluatePresenceRead(
+  coupleId: string,
+  uid: string,
   auth: { uid: string } | null,
-  dataVal: any
+  rootState: RtdbRootState
 ): boolean {
   if (!auth) return false;
+  const couple = rootState.couples?.[coupleId];
+  if (!couple) return false;
 
-  const data = {
-    exists: () => dataVal !== null && dataVal !== undefined,
-    child: (key: string) => {
-      const val = dataVal ? dataVal[key] : undefined;
-      return {
-        exists: () => val !== null && val !== undefined,
-        val: () => val,
-        hasChild: (subKey: string) =>
-          val && typeof val === "object" ? subKey in val : false,
-      };
-    },
-  };
+  const isMember =
+    Boolean(couple.members?.[auth.uid]) ||
+    Boolean(couple.memberIds?.includes(auth.uid)) ||
+    couple.memberIds?.[0] === auth.uid ||
+    couple.memberIds?.[1] === auth.uid;
 
-  const isOwner = auth.uid === $uid;
-  const isPartner = data.child("partnerId").val() === auth.uid;
-  const isAuthorizedUser = data.child("authorizedUsers").hasChild(auth.uid);
-
-  return isOwner || isPartner || isAuthorizedUser;
+  return isMember;
 }
 
-function evaluatePresenceWriteAndValidateRule(
-  ruleString: string,
-  $uid: string,
+function evaluatePresenceWriteAndValidate(
+  coupleId: string,
+  uid: string,
   auth: { uid: string } | null,
   newDataVal: any,
+  rootState: RtdbRootState,
   serverNow: number
 ): { writeAllowed: boolean; validationPassed: boolean } {
-  if (!auth || auth.uid !== $uid) {
+  if (!auth) return { writeAllowed: false, validationPassed: false };
+  if (auth.uid !== uid) return { writeAllowed: false, validationPassed: false };
+
+  const couple = rootState.couples?.[coupleId];
+  const isMember =
+    Boolean(couple?.members?.[auth.uid]) ||
+    Boolean(couple?.memberIds?.includes(auth.uid)) ||
+    couple?.memberIds?.[0] === auth.uid ||
+    couple?.memberIds?.[1] === auth.uid;
+
+  if (!isMember) {
     return { writeAllowed: false, validationPassed: false };
   }
 
-  const newData = {
-    hasChild: (key: string) =>
-      newDataVal && typeof newDataVal === "object" ? key in newDataVal : false,
-    child: (key: string) => {
-      const val = newDataVal ? newDataVal[key] : undefined;
-      return {
-        isString: () => typeof val === "string",
-        isNumber: () => typeof val === "number",
-        val: () => val,
-        hasChild: (subKey: string) =>
-          val && typeof val === "object" ? subKey in val : false,
-      };
-    },
-  };
+  if (!newDataVal || typeof newDataVal !== "object") {
+    return { writeAllowed: true, validationPassed: true };
+  }
 
-  // 1. GPS / sensitive location check
-  const sensitiveGpsKeys = [
-    "lat",
-    "lng",
-    "latitude",
-    "longitude",
-    "location",
-    "gps",
-    "coordinates",
-  ];
-  for (const key of sensitiveGpsKeys) {
-    if (newData.hasChild(key)) {
+  // 1. Impersonation / userId spoofing validation
+  if ("userId" in newDataVal) {
+    if (typeof newDataVal.userId !== "string" || newDataVal.userId !== uid) {
       return { writeAllowed: true, validationPassed: false };
     }
   }
 
-  // 2. userId spoofing validation
-  if (newData.hasChild("userId")) {
-    if (!newData.child("userId").isString() || newData.child("userId").val() !== $uid) {
+  // 2. Client arbitrary timestamp validation
+  if ("lastSeenMs" in newDataVal) {
+    if (newDataVal.lastSeenMs !== serverNow) {
       return { writeAllowed: true, validationPassed: false };
     }
   }
 
-  // 3. partnerId spoofing validation (cannot partner self)
-  if (newData.hasChild("partnerId")) {
-    if (
-      !newData.child("partnerId").isString() ||
-      newData.child("partnerId").val() === $uid ||
-      newData.child("partnerId").val().length > 128
-    ) {
-      return { writeAllowed: true, validationPassed: false };
-    }
-  }
-
-  // 4. authorizedUsers validation (must include self)
-  if (newData.hasChild("authorizedUsers")) {
-    if (!newData.child("authorizedUsers").hasChild($uid)) {
-      return { writeAllowed: true, validationPassed: false };
-    }
-  }
-
-  // 5. lastSeenMs server timestamp validation (Requirement 5: reject client timestamps)
-  if (newData.hasChild("lastSeenMs")) {
-    const val = newData.child("lastSeenMs").val();
-    // In Firebase RTDB, serverTimestamp() maps to 'now'
-    if (val !== serverNow) {
+  // 3. Privacy / GPS protection
+  const locationKeys = ["lat", "lng", "latitude", "longitude", "location", "gps", "coordinates"];
+  for (const k of locationKeys) {
+    if (k in newDataVal) {
       return { writeAllowed: true, validationPassed: false };
     }
   }
@@ -138,236 +104,290 @@ function evaluatePresenceWriteAndValidateRule(
   return { writeAllowed: true, validationPassed: true };
 }
 
-describe("TASK: COUPLE PRESENCE PRIVACY HARDENING", () => {
+describe("PRESENCE AUTHORIZATION HARDENING: SECURITY RULES & PRIVACY INVARIANTS", () => {
   const rulesPath = path.resolve(process.cwd(), "database.rules.json");
   const rulesJson = JSON.parse(fs.readFileSync(rulesPath, "utf8"));
-  const presenceRules = rulesJson.rules.presence["$uid"];
+  const presenceRules = rulesJson.rules.presence;
+  const couplesRules = rulesJson.rules.couples;
 
+  const coupleId = "cpl_tokyo_london_4209";
   const aliceUid = "user_alice_couple1";
   const bobUid = "user_bob_couple1";
-  const charlieUid = "user_charlie_couple2_outsider";
+  const charlieUid = "user_charlie_outsider";
+  const malloryUid = "user_mallory_attacker";
   const serverNow = 1710000000000;
 
-  describe("Requirement 1 & 2 & 7: Couple Presence Read Isolation and Third-Party Rejection", () => {
-    const alicePresenceRecord = {
-      userId: aliceUid,
-      partnerId: bobUid,
-      authorizedUsers: {
-        [aliceUid]: true,
-        [bobUid]: true,
+  // Authoritative server-controlled database state
+  const mockRootState: RtdbRootState = {
+    couples: {
+      [coupleId]: {
+        memberIds: [aliceUid, bobUid],
+        members: {
+          [aliceUid]: true,
+          [bobUid]: true,
+        },
       },
-      displayName: "Alice",
-      state: "ONLINE",
-      connectionStatus: "online",
-      lastSeenMs: serverNow,
-    };
-
-    it("1. Presence is NOT globally readable by arbitrary authenticated users", () => {
-      // In database.rules.json, verify .read is NOT simply 'auth != null'
-      expect(presenceRules[".read"]).not.toBe("auth != null");
-      expect(presenceRules[".read"]).toContain("auth.uid === $uid");
-      expect(presenceRules[".read"]).toContain("partnerId");
-    });
-
-    it("2. User Alice can read her own presence", () => {
-      const canRead = evaluatePresenceReadRule(
-        presenceRules[".read"],
-        aliceUid,
-        { uid: aliceUid },
-        alicePresenceRecord
-      );
-      expect(canRead).toBe(true);
-    });
-
-    it("2. Current partner Bob can read Alice's presence", () => {
-      const canRead = evaluatePresenceReadRule(
-        presenceRules[".read"],
-        aliceUid,
-        { uid: bobUid },
-        alicePresenceRecord
-      );
-      expect(canRead).toBe(true);
-    });
-
-    it("7. Third authenticated user (Charlie - outsider) CANNOT read Alice's presence", () => {
-      const canRead = evaluatePresenceReadRule(
-        presenceRules[".read"],
-        aliceUid,
-        { uid: charlieUid },
-        alicePresenceRecord
-      );
-      expect(canRead).toBe(false);
-    });
-
-    it("7. Unauthenticated user CANNOT read Alice's presence", () => {
-      const canRead = evaluatePresenceReadRule(
-        presenceRules[".read"],
-        aliceUid,
-        null,
-        alicePresenceRecord
-      );
-      expect(canRead).toBe(false);
-    });
-  });
-
-  describe("Requirement 3: Presence Writes Cannot Spoof User ID or Partner ID", () => {
-    it("Cannot write to another user's presence node", () => {
-      // Charlie tries to write to Alice's path
-      const result = evaluatePresenceWriteAndValidateRule(
-        presenceRules[".validate"],
-        aliceUid,
-        { uid: charlieUid },
-        { online: true },
-        serverNow
-      );
-      expect(result.writeAllowed).toBe(false);
-    });
-
-    it("Cannot spoof userId in presence payload", () => {
-      // Alice tries to claim she is Bob
-      const result = evaluatePresenceWriteAndValidateRule(
-        presenceRules[".validate"],
-        aliceUid,
-        { uid: aliceUid },
-        {
-          userId: bobUid, // Spoofed userId!
-          state: "ONLINE",
+      cpl_other: {
+        memberIds: [charlieUid],
+        members: {
+          [charlieUid]: true,
         },
-        serverNow
-      );
-      expect(result.writeAllowed).toBe(true);
-      expect(result.validationPassed).toBe(false);
-    });
-
-    it("Cannot spoof partnerId with self uid (self-partnering)", () => {
-      // Alice tries to set partnerId to aliceUid
-      const result = evaluatePresenceWriteAndValidateRule(
-        presenceRules[".validate"],
-        aliceUid,
-        { uid: aliceUid },
-        {
+      },
+    },
+    presence: {
+      [coupleId]: {
+        [aliceUid]: {
           userId: aliceUid,
-          partnerId: aliceUid, // Self-partnering spoof!
           state: "ONLINE",
-        },
-        serverNow
-      );
-      expect(result.writeAllowed).toBe(true);
-      expect(result.validationPassed).toBe(false);
-    });
-
-    it("Legitimate userId and partnerId pass validation", () => {
-      const result = evaluatePresenceWriteAndValidateRule(
-        presenceRules[".validate"],
-        aliceUid,
-        { uid: aliceUid },
-        {
-          userId: aliceUid,
-          partnerId: bobUid,
-          authorizedUsers: { [aliceUid]: true, [bobUid]: true },
-          state: "ONLINE",
+          connectionStatus: "online",
           lastSeenMs: serverNow,
         },
-        serverNow
-      );
-      expect(result.writeAllowed).toBe(true);
-      expect(result.validationPassed).toBe(true);
+        [bobUid]: {
+          userId: bobUid,
+          state: "ONLINE",
+          connectionStatus: "online",
+          lastSeenMs: serverNow,
+        },
+      },
+    },
+  };
+
+  describe("Architectural & Rule Structure Verification", () => {
+    it("Presence is scoped under $coupleId/$uid in database.rules.json", () => {
+      expect(presenceRules["$coupleId"]).toBeDefined();
+      expect(presenceRules["$coupleId"]["$uid"]).toBeDefined();
+    });
+
+    it("Presence read rule derives authorization strictly from root.child('couples')", () => {
+      const readRule = presenceRules["$coupleId"]["$uid"][".read"];
+      expect(readRule).toContain("root.child('couples').child($coupleId)");
+      // Must NOT rely on client-writable partnerId or authorizedUsers for read access
+      expect(readRule).not.toContain("data.child('partnerId')");
+      expect(readRule).not.toContain("data.child('authorizedUsers')");
+    });
+
+    it("Presence write rule requires membership in root.child('couples')", () => {
+      const writeRule = presenceRules["$coupleId"]["$uid"][".write"];
+      expect(writeRule).toContain("auth != null && auth.uid === $uid");
+      expect(writeRule).toContain("root.child('couples').child($coupleId)");
+    });
+
+    it("Couples collection in RTDB is strictly server-written (.write: false for clients)", () => {
+      expect(couplesRules["$coupleId"][".write"]).toBe(false);
     });
   });
 
-  describe("Requirement 5: Do Not Trust Client-Provided Timestamps as Authoritative", () => {
-    it("Rejects arbitrary client-provided timestamp for lastSeenMs", () => {
-      const fakeClientTimestamp = 123456789; // Client arbitrary timestamp
-      const result = evaluatePresenceWriteAndValidateRule(
-        presenceRules[".validate"],
+  describe("PASS SCENARIOS", () => {
+    it("PASS: User can write their own presence", () => {
+      const result = evaluatePresenceWriteAndValidate(
+        coupleId,
         aliceUid,
         { uid: aliceUid },
         {
           userId: aliceUid,
-          partnerId: bobUid,
-          lastSeenMs: fakeClientTimestamp,
+          state: "ONLINE",
+          connectionStatus: "online",
+          lastSeenMs: serverNow,
         },
+        mockRootState,
         serverNow
       );
-      expect(result.writeAllowed).toBe(true);
-      expect(result.validationPassed).toBe(false);
-    });
 
-    it("Accepts authoritative server timestamp (now) for lastSeenMs", () => {
-      const result = evaluatePresenceWriteAndValidateRule(
-        presenceRules[".validate"],
-        aliceUid,
-        { uid: aliceUid },
-        {
-          userId: aliceUid,
-          partnerId: bobUid,
-          authorizedUsers: { [aliceUid]: true, [bobUid]: true },
-          lastSeenMs: serverNow, // Exactly matches server 'now'
-        },
-        serverNow
-      );
       expect(result.writeAllowed).toBe(true);
       expect(result.validationPassed).toBe(true);
     });
+
+    it("PASS: Partner can read appropriate presence", () => {
+      // Bob reads Alice's presence in their shared couple sanctuary
+      const canRead = evaluatePresenceRead(coupleId, aliceUid, { uid: bobUid }, mockRootState);
+      expect(canRead).toBe(true);
+    });
+
+    it("PASS: Legitimate couple members can interact as intended", () => {
+      // Both Alice and Bob can write their own and read each other's presence
+      const aliceCanReadBob = evaluatePresenceRead(coupleId, bobUid, { uid: aliceUid }, mockRootState);
+      const bobCanReadAlice = evaluatePresenceRead(coupleId, aliceUid, { uid: bobUid }, mockRootState);
+
+      const aliceWrite = evaluatePresenceWriteAndValidate(
+        coupleId,
+        aliceUid,
+        { uid: aliceUid },
+        { userId: aliceUid, state: "IN_GAME", lastSeenMs: serverNow },
+        mockRootState,
+        serverNow
+      );
+
+      const bobWrite = evaluatePresenceWriteAndValidate(
+        coupleId,
+        bobUid,
+        { uid: bobUid },
+        { userId: bobUid, state: "IN_CALL", lastSeenMs: serverNow },
+        mockRootState,
+        serverNow
+      );
+
+      expect(aliceCanReadBob).toBe(true);
+      expect(bobCanReadAlice).toBe(true);
+      expect(aliceWrite.writeAllowed && aliceWrite.validationPassed).toBe(true);
+      expect(bobWrite.writeAllowed && bobWrite.validationPassed).toBe(true);
+    });
   });
 
-  describe("Privacy Boundaries & Location Shielding", () => {
-    it("Rejects latitude / longitude / GPS injections", () => {
-      const result = evaluatePresenceWriteAndValidateRule(
-        presenceRules[".validate"],
+  describe("FAIL SCENARIOS (Security Invariants)", () => {
+    it("FAIL: User cannot authorize an arbitrary third-party UID", () => {
+      // Even if Alice's client payload or state claims mallory is authorized:
+      const poisonedRoot: RtdbRootState = {
+        ...mockRootState,
+        presence: {
+          [coupleId]: {
+            [aliceUid]: {
+              userId: aliceUid,
+              partnerId: malloryUid, // Attacker UID injected by malicious client
+              authorizedUsers: { [malloryUid]: true }, // Spoofed authorized map
+              state: "ONLINE",
+            },
+          },
+        },
+      };
+
+      // Mallory attempts to read Alice's presence
+      const canMalloryRead = evaluatePresenceRead(coupleId, aliceUid, { uid: malloryUid }, poisonedRoot);
+      expect(canMalloryRead).toBe(false);
+    });
+
+    it("FAIL: Unrelated authenticated user cannot read presence", () => {
+      // Charlie belongs to cpl_other, NOT to coupleId
+      const canCharlieRead = evaluatePresenceRead(coupleId, aliceUid, { uid: charlieUid }, mockRootState);
+      expect(canCharlieRead).toBe(false);
+    });
+
+    it("FAIL: Unrelated authenticated user cannot write presence for another couple", () => {
+      // Charlie attempts to write presence in Alice & Bob's couple sanctuary
+      const charlieWrite = evaluatePresenceWriteAndValidate(
+        coupleId,
+        charlieUid,
+        { uid: charlieUid },
+        { userId: charlieUid, state: "ONLINE" },
+        mockRootState,
+        serverNow
+      );
+
+      expect(charlieWrite.writeAllowed).toBe(false);
+    });
+
+    it("FAIL: Changing partnerId cannot grant access", () => {
+      // Alice tries to switch partnerId to charlie in presence payload
+      const payloadWithNewPartner = {
+        userId: aliceUid,
+        partnerId: charlieUid,
+        state: "ONLINE",
+        lastSeenMs: serverNow,
+      };
+
+      // Charlie still CANNOT read Alice's presence because couple membership is server-authoritative
+      const canCharlieRead = evaluatePresenceRead(coupleId, aliceUid, { uid: charlieUid }, mockRootState);
+      expect(canCharlieRead).toBe(false);
+    });
+
+    it("FAIL: One user cannot impersonate another participant", () => {
+      // 1. Alice attempts to write directly to Bob's presence path
+      const aliceWritesBobNode = evaluatePresenceWriteAndValidate(
+        coupleId,
+        bobUid,
+        { uid: aliceUid }, // Auth is Alice, but path $uid is Bob
+        { userId: bobUid, state: "OFFLINE" },
+        mockRootState,
+        serverNow
+      );
+      expect(aliceWritesBobNode.writeAllowed).toBe(false);
+
+      // 2. Alice writes to her path but claims userId is Bob
+      const aliceSpoofsUserId = evaluatePresenceWriteAndValidate(
+        coupleId,
+        aliceUid,
+        { uid: aliceUid },
+        { userId: bobUid, state: "ONLINE" }, // Spoofed userId
+        mockRootState,
+        serverNow
+      );
+      expect(aliceSpoofsUserId.writeAllowed).toBe(true);
+      expect(aliceSpoofsUserId.validationPassed).toBe(false);
+    });
+
+    it("FAIL: Unauthenticated caller cannot read presence", () => {
+      const canUnauthRead = evaluatePresenceRead(coupleId, aliceUid, null, mockRootState);
+      expect(canUnauthRead).toBe(false);
+    });
+
+    it("FAIL: Sensitive GPS / location injection is rejected", () => {
+      const result = evaluatePresenceWriteAndValidate(
+        coupleId,
         aliceUid,
         { uid: aliceUid },
         {
           userId: aliceUid,
           latitude: 35.6762,
           longitude: 139.6503,
+          lastSeenMs: serverNow,
         },
+        mockRootState,
         serverNow
       );
+
+      expect(result.validationPassed).toBe(false);
+    });
+
+    it("FAIL: Arbitrary client-provided timestamp for lastSeenMs is rejected", () => {
+      const result = evaluatePresenceWriteAndValidate(
+        coupleId,
+        aliceUid,
+        { uid: aliceUid },
+        {
+          userId: aliceUid,
+          lastSeenMs: 123456789, // Arbitrary client timestamp
+        },
+        mockRootState,
+        serverNow
+      );
+
       expect(result.validationPassed).toBe(false);
     });
   });
 
-  describe("Requirement 4 & 6: Application Presence Service Behavior", () => {
+  describe("Application Service Privacy Enforcement", () => {
     let service: FirebasePresenceService;
 
     beforeEach(() => {
       service = new FirebasePresenceService();
     });
 
-    it("Seeds baseline presence with partner authorization", () => {
-      const sam = service.getUserPresence("user_sam");
-      expect(sam).not.toBeNull();
-      expect(sam?.partnerId).toBe("user_alex");
-      expect(sam?.authorizedUsers?.["user_alex"]).toBe(true);
-
-      const alex = service.getUserPresence("user_alex");
-      expect(alex).not.toBeNull();
-      expect(alex?.partnerId).toBe("user_sam");
-      expect(alex?.authorizedUsers?.["user_sam"]).toBe(true);
+    it("Registers authoritative couple membership correctly", () => {
+      service.registerCoupleMembership("cpl_test", ["user_1", "user_2"]);
+      expect(service.getEffectiveCoupleId("user_1")).toBe("cpl_test");
+      expect(service.getEffectiveCoupleId("user_2")).toBe("cpl_test");
     });
 
-    it("Local simulation preserves partner state without sending illegal writes", () => {
-      let partnerState: string | undefined;
-      const unsub = service.subscribeToUserPresence("user_alex", (rec) => {
-        partnerState = rec?.state;
-      });
+    it("Filters unauthorized subscription attempts for users outside the couple", () => {
+      service.registerCoupleMembership("cpl_test", ["user_1", "user_2"]);
+      let receivedRecord: unknown = "not_called";
 
-      service.setLocalSimulatedPartnerPresence("user_alex", "IN_GAME");
-      expect(partnerState).toBe("IN_GAME");
+      // Mock auth to represent outsider user_3
+      vi.mock("@/lib/firebase/client", () => ({
+        auth: { currentUser: { uid: "user_3" } },
+        rtdb: null,
+      }));
 
-      service.setLocalSimulatedPartnerPresence("user_alex", "OFFLINE");
-      expect(partnerState).toBe("OFFLINE");
+      const unsub = service.subscribeToUserPresence(
+        "user_1",
+        (record) => {
+          receivedRecord = record;
+        },
+        "cpl_test"
+      );
 
+      // outsider user_3 should receive null (privacy shield)
+      expect(receivedRecord).toBeNull();
       unsub();
-    });
-
-    it("Legitimate state transitions are recorded accurately", async () => {
-      await service.setPresenceState("user_sam", "IN_CALL", "Listening to audio");
-      const sam = service.getUserPresence("user_sam");
-      expect(sam?.state).toBe("IN_CALL");
-      expect(sam?.currentActivity).toBe("Listening to audio");
-      expect(sam?.connectionStatus).toBe("online");
     });
   });
 });

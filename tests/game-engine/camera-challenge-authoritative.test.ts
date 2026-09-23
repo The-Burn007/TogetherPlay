@@ -467,7 +467,7 @@ describe("Camera Challenge - Authoritative Multiplayer Engine", () => {
     );
 
     expect(duplicateSubmission.accepted).toBe(true);
-    expect(duplicateSubmission.version).toBe(firstSubmission.version);
+    expect(duplicateSubmission.stateVersion).toBe(firstSubmission.stateVersion);
   });
 
   it("handles concurrent submissions cleanly without corrupted state", async () => {
@@ -554,6 +554,8 @@ describe("Camera Challenge - Authoritative Multiplayer Engine", () => {
       roundStartedAtServer: now,
       roundDeadlineServer: now + 60000,
       serverTimestamp: now,
+      processedActionIds: {},
+      isFinished: false,
       data: {
         gameType: "camera_challenge",
         stage: "partner_review",

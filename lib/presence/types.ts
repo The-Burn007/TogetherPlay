@@ -72,6 +72,7 @@ export interface PartnerNotification {
   actionLabel?: string;
   gameId?: string;
   metadata?: Record<string, unknown>;
+  coupleId?: string;
 }
 
 export function getNotificationCategory(type: NotificationType): NotificationCategory {

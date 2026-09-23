@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { notificationService } from "@/lib/firebase/services/notifications";
+import { coupleService } from "@/lib/firebase/services/couple";
 import {
   type PartnerNotification,
   type NotificationSettings,
@@ -13,12 +14,49 @@ export function useNotifications() {
   const { user } = useAuth();
   const myUserId = user?.uid || "user_alex";
   const myDisplayName = user?.displayName || (myUserId === "user_sam" ? "Sam" : "Alex");
-  const partnerUserId = myUserId === "user_sam" ? "user_alex" : "user_sam";
+  const defaultPartnerId = myUserId === "user_sam" ? "user_alex" : "user_sam";
+  const [partnerUserId, setPartnerUserId] = useState<string>(defaultPartnerId);
+  const [coupleId, setCoupleId] = useState<string>("cpl_tokyo_london_4209");
 
   const [notifications, setNotifications] = useState<PartnerNotification[]>([]);
   const [settings, setSettings] = useState<NotificationSettings>(
     () => notificationService.getSettings()
   );
+
+  // Sync coupleId and partner identity from authoritative couple membership
+  useEffect(() => {
+    if (!user?.uid) {
+      setPartnerUserId(defaultPartnerId);
+      setCoupleId("cpl_tokyo_london_4209");
+      notificationService.setCoupleId("cpl_tokyo_london_4209");
+      return;
+    }
+
+    if (user.uid === "user_sam" || user.uid === "user_alex") {
+      setCoupleId("cpl_tokyo_london_4209");
+      setPartnerUserId(user.uid === "user_sam" ? "user_alex" : "user_sam");
+      notificationService.setCoupleId("cpl_tokyo_london_4209");
+      return;
+    }
+
+    let isMounted = true;
+    coupleService
+      .getUserCouple(user.uid)
+      .then((couple) => {
+        if (!isMounted || !couple) return;
+        setCoupleId(couple.coupleId);
+        notificationService.setCoupleId(couple.coupleId);
+        const partner = couple.memberIds?.find((id) => id !== user.uid);
+        if (partner) {
+          setPartnerUserId(partner);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.uid, defaultPartnerId]);
 
   // Subscribe to notification settings
   useEffect(() => {
@@ -68,9 +106,10 @@ export function useNotifications() {
         toUserId: partnerUserId,
         gameId,
         gameTitle,
+        coupleId,
       });
     },
-    [myUserId, myDisplayName, partnerUserId]
+    [myUserId, myDisplayName, partnerUserId, coupleId]
   );
 
   const partnerStartedGame = useCallback(
@@ -81,9 +120,10 @@ export function useNotifications() {
         toUserId: partnerUserId,
         gameId,
         gameTitle,
+        coupleId,
       });
     },
-    [myUserId, myDisplayName, partnerUserId]
+    [myUserId, myDisplayName, partnerUserId, coupleId]
   );
 
   const sendChallenge = useCallback(
@@ -94,9 +134,10 @@ export function useNotifications() {
         toUserId: partnerUserId,
         challengeTitle,
         challengeId,
+        coupleId,
       });
     },
-    [myUserId, myDisplayName, partnerUserId]
+    [myUserId, myDisplayName, partnerUserId, coupleId]
   );
 
   const shareDailyMoment = useCallback(
@@ -107,9 +148,10 @@ export function useNotifications() {
         toUserId: partnerUserId,
         momentTitle,
         momentId,
+        coupleId,
       });
     },
-    [myUserId, myDisplayName, partnerUserId]
+    [myUserId, myDisplayName, partnerUserId, coupleId]
   );
 
   const requestRematch = useCallback(
@@ -120,9 +162,10 @@ export function useNotifications() {
         toUserId: partnerUserId,
         gameId,
         gameTitle,
+        coupleId,
       });
     },
-    [myUserId, myDisplayName, partnerUserId]
+    [myUserId, myDisplayName, partnerUserId, coupleId]
   );
 
   const unreadCount = useMemo(

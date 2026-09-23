@@ -58,8 +58,6 @@ describe("Formalized Public/Private Game State Contract", () => {
   beforeEach(() => {
     repository = new ServerGameRepository({
       useLiveBackend: false,
-      initialSessions: [],
-      initialStates: [],
     });
   });
 
@@ -340,12 +338,13 @@ describe("Formalized Public/Private Game State Contract", () => {
     it("AuthoritativeGameEngine.applyAction guarantees updatedState has 0 leaks on START_GAME", () => {
       const session: GameSession = {
         gameId: GAME_ID,
+        coupleId: "couple_contract_test",
         gameType: "find_it_first",
         status: "ready",
         playerIds: [PLAYER_A, PLAYER_B],
         createdBy: PLAYER_A,
         createdAt: new Date().toISOString(),
-        isTest: true,
+        schemaVersion: 1,
       };
 
       const state: GameState = {
@@ -377,7 +376,7 @@ describe("Formalized Public/Private Game State Contract", () => {
           type: "START_GAME",
           playerId: PLAYER_A,
           clientActionId: "act_start_contract_test",
-          timestamp: Date.now(),
+          clientTimestamp: Date.now(),
           payload: {},
         },
         PLAYER_A,
@@ -404,12 +403,13 @@ describe("Formalized Public/Private Game State Contract", () => {
     it("submitGameAction returns gameState conforming strictly to PublicGameState contract", async () => {
       const session: GameSession = {
         gameId: GAME_ID,
+        coupleId: "couple_contract_test",
         gameType: "find_it_first",
         status: "ready",
         playerIds: [PLAYER_A, PLAYER_B],
         createdBy: PLAYER_A,
         createdAt: new Date().toISOString(),
-        isTest: true,
+        schemaVersion: 1,
       };
 
       const state: GameState = {

@@ -75,16 +75,52 @@ const mockAdminFirestore = {
         get: vi.fn(async () => getDocData()),
         set: vi.fn().mockResolvedValue(undefined),
         update: vi.fn().mockResolvedValue(undefined),
-        collection: vi.fn((subCol: string) => ({
-          doc: vi.fn((subDocId: string) => ({
-            get: vi.fn(async () => ({ exists: false, data: () => null })),
-            set: vi.fn().mockResolvedValue(undefined),
-          })),
-          orderBy: vi.fn(() => ({
+        collection: vi.fn((subCol: string) => {
+          if (colName === "couples" && docId === "cpl_demo" && subCol === "memories") {
+            const memoryDocs = [
+              {
+                id: "mem_curated_1",
+                data: () => ({
+                  title: "Sunset in Kyoto",
+                  date: "2026-05-10",
+                  context: "Walking down the bamboo path",
+                  type: "photo",
+                  createdBy: "user_a",
+                  authorName: "Alex",
+                  createdAt: "2026-05-10T12:00:00.000Z",
+                }),
+              },
+            ];
+            return {
+              doc: vi.fn((subDocId: string) => ({
+                get: vi.fn(async () => ({ exists: false, data: () => null })),
+                set: vi.fn().mockResolvedValue(undefined),
+              })),
+              orderBy: vi.fn(() => ({
+                get: vi.fn(async () => ({
+                  empty: false,
+                  forEach: (fn: (d: any) => void) => memoryDocs.forEach(fn),
+                  docs: memoryDocs,
+                })),
+              })),
+              get: vi.fn(async () => ({
+                empty: false,
+                forEach: (fn: (d: any) => void) => memoryDocs.forEach(fn),
+                docs: memoryDocs,
+              })),
+            };
+          }
+          return {
+            doc: vi.fn((subDocId: string) => ({
+              get: vi.fn(async () => ({ exists: false, data: () => null })),
+              set: vi.fn().mockResolvedValue(undefined),
+            })),
+            orderBy: vi.fn(() => ({
+              get: vi.fn(async () => ({ empty: true, docs: [] })),
+            })),
             get: vi.fn(async () => ({ empty: true, docs: [] })),
-          })),
-          get: vi.fn(async () => ({ empty: true, docs: [] })),
-        })),
+          };
+        }),
       };
     }),
   })),

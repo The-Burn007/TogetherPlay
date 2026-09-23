@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sha256 } from "@/lib/utils/crypto";
-import { getAdminFirestore } from "@/lib/firebase/server/admin";
+import { getAdminFirestore, seedAuthoritativeCoupleMembership } from "@/lib/firebase/server/admin";
 import { requireServerAuth, forbiddenResponse } from "@/lib/firebase/server/auth";
 import { requireAppCheck, checkApiRateLimit } from "@/lib/firebase/server/security";
 import type { Couple, CoupleInvite } from "@/types/domain";
@@ -131,13 +131,15 @@ export async function POST(req: NextRequest) {
         return {
           alreadyMember: true,
           coupleId: couple.coupleId,
+          memberIds: couple.memberIds,
         };
       }
 
       // 3.8. Execute atomic transactional writes
       const nowIso = new Date().toISOString();
+      const updatedMemberIds = [couple.memberIds[0], acceptingUserId];
       transaction.update(coupleRef, {
-        memberIds: [couple.memberIds[0], acceptingUserId],
+        memberIds: updatedMemberIds,
         updatedAt: nowIso,
       });
 
@@ -159,8 +161,18 @@ export async function POST(req: NextRequest) {
       return {
         alreadyMember: false,
         coupleId: couple.coupleId,
+        memberIds: updatedMemberIds,
       };
     });
+
+    // Synchronize authoritative couple membership to RTDB so presence rules can verify it
+    try {
+      if (txResult.memberIds) {
+        await seedAuthoritativeCoupleMembership(txResult.coupleId, txResult.memberIds);
+      }
+    } catch {
+      // Non-blocking sync error
+    }
 
     if (txResult.alreadyMember) {
       return NextResponse.json({

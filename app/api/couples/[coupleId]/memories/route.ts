@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminFirestore } from "@/lib/firebase/server/admin";
 import type { Couple } from "@/types/domain";
 import type { CoupleMemory, CreateMemoryPayload } from "@/lib/memories/types";
-import { getDefaultCoupleMemories } from "@/lib/memories/defaultMemories";
 import { checkApiRateLimit, requireAppCheck } from "@/lib/firebase/server/security";
 import { requireServerAuth, forbiddenResponse } from "@/lib/firebase/server/auth";
 
@@ -75,7 +74,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
       if (snapshot.empty) {
         return NextResponse.json({
-          memories: getDefaultCoupleMemories(coupleId),
+          memories: [],
         });
       }
 
@@ -88,10 +87,12 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       });
 
       return NextResponse.json({ memories });
-    } catch {
-      return NextResponse.json({
-        memories: getDefaultCoupleMemories(coupleId),
-      });
+    } catch (dbError) {
+      console.error(`Firestore memories query failure for couple ${coupleId}:`, dbError);
+      return NextResponse.json(
+        { error: "Failed to retrieve memories from database" },
+        { status: 500 }
+      );
     }
   } catch (error: unknown) {
     console.error("GET /api/couples/[coupleId]/memories error:", error);

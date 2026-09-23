@@ -401,4 +401,450 @@ describe("Firebase Persistence Failure & Anti-Fallback Hardening", () => {
     expect(thrown).toBeInstanceOf(PersistenceError);
     expect((thrown as PersistenceError).operation).toBe("saveGameResult");
   });
+
+  describe("RTDB to Firestore and Private-State Consistency & Reconciliation Scenarios", () => {
+    beforeEach(() => {
+      repository = new ServerGameRepository();
+      repository.seedGame(createBaseSession(), createBaseState());
+    });
+
+    it("Scenario 1: RTDB transaction succeeds, Firestore persistence fails", async () => {
+      repository.simulatePersistenceFailure({
+        failSaveGameSession: new Error("Firestore 503 Service Unavailable"),
+      });
+
+      const action: GameAction = {
+        gameId: GAME_ID,
+        clientActionId: `act_scen1_${Date.now()}`,
+        playerId: PLAYER_A,
+        type: "SELECT_CELL",
+        payload: { cellId: "watch" },
+        clientTimestamp: Date.now(),
+      };
+
+      let thrown: unknown = null;
+      try {
+        await submitGameAction(action, {
+          auth: { uid: PLAYER_A },
+          repository,
+          enforceAppCheck: false,
+        });
+      } catch (err) {
+        thrown = err;
+      }
+
+      // Must throw PersistenceError, rejecting false success
+      expect(thrown).toBeInstanceOf(PersistenceError);
+      expect((thrown as PersistenceError).operation).toBe("saveGameSession");
+
+      // Verify RTDB state transacted processed action ID
+      const ephemeral = await repository.getEphemeralGameState(GAME_ID);
+      expect(ephemeral?.processedActionIds?.[action.clientActionId]).toBeDefined();
+    });
+
+    it("Scenario 2: RTDB transaction succeeds, private state persistence fails", async () => {
+      const roundEndState: GameState = {
+        ...createBaseState(),
+        currentRound: 1,
+        status: "round_end",
+        scores: { [PLAYER_A]: 100, [PLAYER_B]: 0 },
+        data: {
+          roundWinnerId: PLAYER_A,
+          usedTargetIds: ["watch"],
+        },
+      };
+      repository.seedGame({ ...createBaseSession(), status: "round_end" }, roundEndState);
+
+      repository.simulatePersistenceFailure({
+        failSavePrivateGameState: new Error("RTDB private state write failure"),
+      });
+
+      const nextRoundAction: GameAction = {
+        gameId: GAME_ID,
+        clientActionId: `act_scen2_${Date.now()}`,
+        playerId: PLAYER_A,
+        type: "NEXT_ROUND",
+        payload: {},
+        clientTimestamp: Date.now(),
+      };
+
+      let thrown: unknown = null;
+      try {
+        await submitGameAction(nextRoundAction, {
+          auth: { uid: PLAYER_A },
+          repository,
+          enforceAppCheck: false,
+        });
+      } catch (err) {
+        thrown = err;
+      }
+
+      expect(thrown).toBeInstanceOf(PersistenceError);
+      expect((thrown as PersistenceError).operation).toBe("savePrivateGameState");
+    });
+
+    it("Scenario 3: Firestore persistence fails once and succeeds on retry", async () => {
+      repository.simulatePersistenceFailure({
+        failSaveGameSession: new Error("Firestore transient failure"),
+      });
+
+      const actionId = `act_scen3_${Date.now()}`;
+      const action: GameAction = {
+        gameId: GAME_ID,
+        clientActionId: actionId,
+        playerId: PLAYER_A,
+        type: "SELECT_CELL",
+        payload: { cellId: "watch" },
+        clientTimestamp: Date.now(),
+      };
+
+      // First attempt fails
+      let firstAttemptThrown: unknown = null;
+      try {
+        await submitGameAction(action, {
+          auth: { uid: PLAYER_A },
+          repository,
+          enforceAppCheck: false,
+        });
+      } catch (err) {
+        firstAttemptThrown = err;
+      }
+      expect(firstAttemptThrown).toBeInstanceOf(PersistenceError);
+
+      // Clear simulated failure
+      repository.clearPersistenceFailureSimulation();
+
+      // Retry with identical clientActionId
+      const retryResult = await submitGameAction(action, {
+        auth: { uid: PLAYER_A },
+        repository,
+        enforceAppCheck: false,
+      });
+
+      expect(retryResult.accepted).toBe(true);
+      expect(retryResult.idempotentDuplicate).toBe(true);
+
+      // Verify Firestore session was reconciled
+      const reconciledSession = await repository.getGameSession(GAME_ID);
+      expect(reconciledSession?.status).toBe("round_end");
+
+      // Verify score is awarded exactly once (no double scoring: 250 for 1 round, not 500)
+      expect(retryResult.gameState.scores[PLAYER_A]).toBe(250);
+    });
+
+    it("Scenario 4: Duplicate clientActionId after a persistence failure", async () => {
+      repository.simulatePersistenceFailure({
+        failSaveGameSession: new Error("Transient error"),
+      });
+
+      const actionId = `act_scen4_${Date.now()}`;
+      const action: GameAction = {
+        gameId: GAME_ID,
+        clientActionId: actionId,
+        playerId: PLAYER_A,
+        type: "SELECT_CELL",
+        payload: { cellId: "watch" },
+        clientTimestamp: Date.now(),
+      };
+
+      // Attempt 1 fails
+      await expect(
+        submitGameAction(action, {
+          auth: { uid: PLAYER_A },
+          repository,
+          enforceAppCheck: false,
+        })
+      ).rejects.toBeInstanceOf(PersistenceError);
+
+      // Attempt 2 succeeds after error clears
+      repository.clearPersistenceFailureSimulation();
+      const retry1 = await submitGameAction(action, {
+        auth: { uid: PLAYER_A },
+        repository,
+        enforceAppCheck: false,
+      });
+      expect(retry1.accepted).toBe(true);
+
+      // Attempt 3 (duplicate after successful reconciliation)
+      const retry2 = await submitGameAction(action, {
+        auth: { uid: PLAYER_A },
+        repository,
+        enforceAppCheck: false,
+      });
+      expect(retry2.accepted).toBe(true);
+      expect(retry2.idempotentDuplicate).toBe(true);
+      expect(retry2.stateVersion).toBe(retry1.stateVersion);
+      expect(retry2.gameState.scores[PLAYER_A]).toBe(retry1.gameState.scores[PLAYER_A]);
+    });
+
+    it("Scenario 5: Find It First SELECT_CELL under persistence failure", async () => {
+      repository.simulatePersistenceFailure({
+        failSaveGameSession: new Error("Firestore save failure"),
+      });
+
+      const fixedTime = Date.now();
+      const actionId = `act_scen5_${fixedTime}`;
+      const action: GameAction = {
+        gameId: GAME_ID,
+        clientActionId: actionId,
+        playerId: PLAYER_A,
+        type: "SELECT_CELL",
+        payload: { cellId: "watch" },
+        clientTimestamp: fixedTime,
+      };
+
+      // Fails on initial attempt
+      await expect(
+        submitGameAction(action, {
+          auth: { uid: PLAYER_A },
+          repository,
+          enforceAppCheck: false,
+          serverTimestamp: fixedTime,
+        })
+      ).rejects.toBeInstanceOf(PersistenceError);
+
+      // Retry after network recovery
+      repository.clearPersistenceFailureSimulation();
+      const retryResult = await submitGameAction(action, {
+        auth: { uid: PLAYER_A },
+        repository,
+        enforceAppCheck: false,
+        serverTimestamp: fixedTime,
+      });
+
+      expect(retryResult.accepted).toBe(true);
+      expect(retryResult.gameState.status).toBe("round_end");
+      expect(retryResult.gameState.data.roundWinnerId).toBe(PLAYER_A);
+
+      // Verified: score awarded once (no double scoring: 250 for 1 round, not 500)
+      const finalScore = retryResult.gameState.scores[PLAYER_A];
+      expect(finalScore).toBe(250);
+
+      // Verified: claim marked completed
+      const claim = await repository.getActionClaim(actionId);
+      expect(claim?.status).toBe("completed");
+    });
+
+    it("Scenario 6: NEXT_ROUND under persistence failure", async () => {
+      const roundEndState: GameState = {
+        ...createBaseState(),
+        currentRound: 1,
+        maxRounds: 5,
+        status: "round_end",
+        scores: { [PLAYER_A]: 110, [PLAYER_B]: 0 },
+        data: {
+          roundWinnerId: PLAYER_A,
+          usedTargetIds: ["watch"],
+        },
+      };
+      repository.seedGame({ ...createBaseSession(), status: "round_end" }, roundEndState);
+
+      // Simulate private state persistence failure
+      repository.simulatePersistenceFailure({
+        failSavePrivateGameState: new Error("Private state write failed"),
+      });
+
+      const nextRoundActionId = `act_scen6_${Date.now()}`;
+      const nextRoundAction: GameAction = {
+        gameId: GAME_ID,
+        clientActionId: nextRoundActionId,
+        playerId: PLAYER_A,
+        type: "NEXT_ROUND",
+        payload: {},
+        clientTimestamp: Date.now(),
+      };
+
+      await expect(
+        submitGameAction(nextRoundAction, {
+          auth: { uid: PLAYER_A },
+          repository,
+          enforceAppCheck: false,
+        })
+      ).rejects.toBeInstanceOf(PersistenceError);
+
+      // Recover and retry NEXT_ROUND
+      repository.clearPersistenceFailureSimulation();
+      const retryResult = await submitGameAction(nextRoundAction, {
+        auth: { uid: PLAYER_A },
+        repository,
+        enforceAppCheck: false,
+      });
+
+      expect(retryResult.accepted).toBe(true);
+      // Invariant: No double round advancement! Round is exactly 2, not 3.
+      expect(retryResult.gameState.currentRound).toBe(2);
+      expect(retryResult.gameState.status).toBe("playing");
+
+      // Invariant: Private state was safely repaired and matches targetClue
+      const priv = await repository.getPrivateGameState(GAME_ID);
+      expect(priv?.targetId).toBeDefined();
+      expect(priv?.targetClue).toBe(retryResult.gameState.data?.targetClue);
+
+      // Verify that playing round 2 with the new private target succeeds
+      const round2Action: GameAction = {
+        gameId: GAME_ID,
+        clientActionId: `act_scen6_r2_${Date.now()}`,
+        playerId: PLAYER_A,
+        type: "SELECT_CELL",
+        payload: { cellId: priv!.targetId },
+        clientTimestamp: Date.now(),
+      };
+
+      const round2Result = await submitGameAction(round2Action, {
+        auth: { uid: PLAYER_A },
+        repository,
+        enforceAppCheck: false,
+      });
+
+      expect(round2Result.accepted).toBe(true);
+      expect(round2Result.gameState.data.roundWinnerId).toBe(PLAYER_A);
+    });
+
+    it("Scenario 7: GAME_END/result persistence failure", async () => {
+      // Seed round 5 near end
+      const nearEndState: GameState = {
+        ...createBaseState(),
+        currentRound: 5,
+        maxRounds: 5,
+        scores: { [PLAYER_A]: 400, [PLAYER_B]: 0 },
+        data: {
+          targetId: "watch",
+          targetName: "Vintage Pocket Watch",
+          board: ["watch", "compass", "key", "seal", "pen", "hourglass", "prism", "book", "camera", "bell", "monocle", "mug"],
+          roundStage: "active",
+          usedTargetIds: ["watch"],
+        },
+      };
+      repository.seedGame(createBaseSession(), nearEndState);
+
+      repository.simulatePersistenceFailure({
+        failSaveGameResult: new Error("Firestore quota exceeded"),
+      });
+
+      const winActionId = `act_scen7_${Date.now()}`;
+      const winningAction: GameAction = {
+        gameId: GAME_ID,
+        clientActionId: winActionId,
+        playerId: PLAYER_A,
+        type: "SELECT_CELL",
+        payload: { cellId: "watch" },
+        clientTimestamp: Date.now(),
+      };
+
+      // First attempt fails at saveGameResult
+      await expect(
+        submitGameAction(winningAction, {
+          auth: { uid: PLAYER_A },
+          repository,
+          enforceAppCheck: false,
+        })
+      ).rejects.toBeInstanceOf(PersistenceError);
+
+      // Error clears and client retries
+      repository.clearPersistenceFailureSimulation();
+      const retryResult = await submitGameAction(winningAction, {
+        auth: { uid: PLAYER_A },
+        repository,
+        enforceAppCheck: false,
+      });
+
+      expect(retryResult.accepted).toBe(true);
+      expect(retryResult.gameState.isFinished).toBe(true);
+      expect(retryResult.gameState.status).toBe("game_end");
+      expect(retryResult.gameResult).toBeDefined();
+      expect(retryResult.gameResult?.winnerId).toBe(PLAYER_A);
+
+      // Invariant: GameResult was persisted to Firestore and matches
+      const durableResult = await repository.getGameResult(`res_${GAME_ID}`);
+      expect(durableResult).toBeDefined();
+      expect(durableResult?.winnerId).toBe(PLAYER_A);
+
+      // Invariant: Session status updated to game_end with endedAt
+      const savedSession = await repository.getGameSession(GAME_ID);
+      expect(savedSession?.status).toBe("game_end");
+      expect(savedSession?.endedAt).toBeDefined();
+    });
+
+    it("Scenario 8: Retry after partial persistence", async () => {
+      // Partial persistence: RTDB state and private state persist, but session fails
+      repository.simulatePersistenceFailure({
+        failSaveGameSession: new Error("Firestore network disconnect"),
+      });
+
+      const actionId = `act_scen8_${Date.now()}`;
+      const action: GameAction = {
+        gameId: GAME_ID,
+        clientActionId: actionId,
+        playerId: PLAYER_A,
+        type: "SELECT_CELL",
+        payload: { cellId: "watch" },
+        clientTimestamp: Date.now(),
+      };
+
+      await expect(
+        submitGameAction(action, {
+          auth: { uid: PLAYER_A },
+          repository,
+          enforceAppCheck: false,
+        })
+      ).rejects.toBeInstanceOf(PersistenceError);
+
+      // Private state should be intact in repository
+      const privateState = await repository.getPrivateGameState(GAME_ID);
+      expect(privateState).toBeDefined();
+
+      // Retry
+      repository.clearPersistenceFailureSimulation();
+      const retryResult = await submitGameAction(action, {
+        auth: { uid: PLAYER_A },
+        repository,
+        enforceAppCheck: false,
+      });
+
+      expect(retryResult.accepted).toBe(true);
+      const updatedSession = await repository.getGameSession(GAME_ID);
+      expect(updatedSession?.status).toBe("round_end");
+
+      const claim = await repository.getActionClaim(actionId);
+      expect(claim?.status).toBe("completed");
+    });
+
+    it("Scenario 9: Concurrent duplicate requests with the same clientActionId", async () => {
+      const dupActionId = `act_scen9_concurrent_${Date.now()}`;
+      const action: GameAction = {
+        gameId: GAME_ID,
+        clientActionId: dupActionId,
+        playerId: PLAYER_A,
+        type: "SELECT_CELL",
+        payload: { cellId: "watch" },
+        clientTimestamp: Date.now(),
+      };
+
+      const [res1, res2, res3] = await Promise.all([
+        submitGameAction(action, { auth: { uid: PLAYER_A }, repository, enforceAppCheck: false }),
+        submitGameAction(action, { auth: { uid: PLAYER_A }, repository, enforceAppCheck: false }),
+        submitGameAction(action, { auth: { uid: PLAYER_A }, repository, enforceAppCheck: false }),
+      ]);
+
+      // All 3 resolve with accepted: true
+      expect(res1.accepted).toBe(true);
+      expect(res2.accepted).toBe(true);
+      expect(res3.accepted).toBe(true);
+
+      // Exactly one primary execution, two idempotent duplicates
+      const results = [res1, res2, res3];
+      const primaryCount = results.filter((r) => !r.idempotentDuplicate).length;
+      const dupCount = results.filter((r) => r.idempotentDuplicate).length;
+      expect(primaryCount).toBe(1);
+      expect(dupCount).toBe(2);
+
+      // Invariant: Exactly one score increment across all requests (no race, no double-scoring)
+      expect(res1.gameState.scores[PLAYER_A]).toBe(res2.gameState.scores[PLAYER_A]);
+      expect(res2.gameState.scores[PLAYER_A]).toBe(res3.gameState.scores[PLAYER_A]);
+
+      // Ephemeral state version is identical across all responses
+      expect(res1.stateVersion).toBe(res2.stateVersion);
+      expect(res2.stateVersion).toBe(res3.stateVersion);
+    });
+  });
 });

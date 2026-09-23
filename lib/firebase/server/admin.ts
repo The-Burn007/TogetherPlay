@@ -198,3 +198,32 @@ export function resetAdminInstancesForTesting(): void {
   adminStorage = null;
 }
 
+/**
+ * Synchronizes authoritative couple membership to Firebase Realtime Database.
+ * RTDB security rules check root.child('couples').child(coupleId) for presence authorization.
+ * Since RTDB /couples has .write: false for clients, this server-only write establishes
+ * the non-forgeable ground truth of couple membership.
+ */
+export async function seedAuthoritativeCoupleMembership(
+  coupleId: string,
+  memberIds: string[]
+): Promise<void> {
+  try {
+    const db = getAdminDatabase();
+    const membersMap = memberIds.reduce<Record<string, boolean>>((acc, id) => {
+      acc[id] = true;
+      return acc;
+    }, {});
+
+    await db.ref(`couples/${coupleId}`).set({
+      coupleId,
+      memberIds,
+      members: membersMap,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn(`[RTDB] Failed to seed authoritative couple membership for ${coupleId}:`, err);
+  }
+}
+
+

@@ -81,6 +81,7 @@ export interface SignalingServiceContract {
     callback: (candidate: WebRtcSignalCandidate) => void
   ): () => void;
   clearRoomSignaling(roomId: string, myUserId: string): Promise<void>;
+  cleanupTransientSignaling(roomId: string, myUserId: string): Promise<void>;
   cleanStaleRoomSignaling(roomId: string, maxAgeMs?: number): Promise<{ cleaned: boolean }>;
 }
 
@@ -132,8 +133,13 @@ class MemorySignalingBus {
     this.staleRooms.delete(roomId);
   }
 
-  markRoomStale(roomId: string): void {
-    this.staleRooms.add(roomId);
+  markRoomStale(roomId: string, stale = true): void {
+    if (stale) {
+      this.staleRooms.add(roomId);
+    } else {
+      this.staleRooms.delete(roomId);
+      this.touchRoom(roomId);
+    }
   }
 
   setRoomStale(roomId: string, stale: boolean): void {
@@ -328,6 +334,15 @@ class MemorySignalingBus {
     this.notify(this.getChannelKey("candidate", roomId, userId), null);
   }
 
+  clearTransientSignaling(roomId: string, userId: string) {
+    this.offers.get(roomId)?.delete(userId);
+    this.notify(this.getChannelKey("offer", roomId, userId), null);
+    this.answers.get(roomId)?.delete(userId);
+    this.notify(this.getChannelKey("answer", roomId, userId), null);
+    this.candidates.get(roomId)?.delete(userId);
+    this.notify(this.getChannelKey("candidate", roomId, userId), null);
+  }
+
   resetAll() {
     this.participants.clear();
     this.offers.clear();
@@ -367,6 +382,18 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
   public validatePayloadSize(payload: unknown, type: "offer" | "answer" | "candidate"): void {
     if (!payload || typeof payload !== "object") {
       throw new SignalingSecurityError("Signaling payload must be a non-null object.", "PAYLOAD_TOO_LARGE");
+    }
+
+    const pRecord = payload as { timestamp?: unknown };
+    if (typeof pRecord.timestamp === "number") {
+      const now = Date.now();
+      const age = now - pRecord.timestamp;
+      if (age > MAX_STALE_ROOM_AGE_MS || age < -300000) {
+        throw new SignalingSecurityError(
+          "Signaling payload timestamp is expired, stale, or invalid.",
+          "STALE_ROOM"
+        );
+      }
     }
 
     if (type === "offer" || type === "answer") {
@@ -823,6 +850,30 @@ export class FirebaseWebRtcSignalingService implements SignalingServiceContract 
         ]);
       } catch (err) {
         console.warn("[Signaling] RTDB clearRoomSignaling fallback:", err);
+      }
+    }
+  }
+
+  /**
+   * Cleans transient signaling payloads (offers, answers, candidates) once connection is established,
+   * keeping participant presence active. Prevents accumulation of stale signaling data.
+   */
+  async cleanupTransientSignaling(roomId: string, myUserId: string): Promise<void> {
+    this.verifyRoomAuthorization(roomId, myUserId);
+    memorySignalingBus.clearTransientSignaling(roomId, myUserId);
+    if (this.hasRtdb()) {
+      try {
+        const offersRef = ref(rtdb, `webrtc_signaling/${roomId}/offers/${myUserId}`);
+        const answersRef = ref(rtdb, `webrtc_signaling/${roomId}/answers/${myUserId}`);
+        const candidatesRef = ref(rtdb, `webrtc_signaling/${roomId}/candidates/${myUserId}`);
+
+        await Promise.allSettled([
+          withTimeout(remove(offersRef)),
+          withTimeout(remove(answersRef)),
+          withTimeout(remove(candidatesRef)),
+        ]);
+      } catch (err) {
+        console.warn("[Signaling] RTDB cleanupTransientSignaling fallback:", err);
       }
     }
   }

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ServerGameRepository, PersistenceError, logStructuredError } from "@/lib/firebase/server/gameRepository";
 import { submitGameAction } from "@/lib/firebase/server/submitGameAction";
 import type { GameSession, GameState, GameAction } from "@/types/domain";
@@ -75,6 +75,7 @@ describe("Firebase Persistence Failure & Anti-Fallback Hardening", () => {
   const PLAYER_A = "user_pers_alex";
   const PLAYER_B = "user_pers_sam";
   const COUPLE_ID = "couple_london_paris";
+  const FIXED_TEST_TIMESTAMP = 1700000000000;
 
   const createBaseSession = (): GameSession => ({
     gameId: GAME_ID,
@@ -83,7 +84,7 @@ describe("Firebase Persistence Failure & Anti-Fallback Hardening", () => {
     status: "playing",
     playerIds: [PLAYER_A, PLAYER_B],
     createdBy: PLAYER_A,
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(FIXED_TEST_TIMESTAMP).toISOString(),
     schemaVersion: 1,
   });
 
@@ -111,9 +112,15 @@ describe("Firebase Persistence Failure & Anti-Fallback Hardening", () => {
   });
 
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_TEST_TIMESTAMP);
     repository = new ServerGameRepository();
     repository.clearForTesting();
     repository.seedGame(createBaseSession(), createBaseState());
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("Requirement 1 & 2: saveGameSession failure is not swallowed and rejects game action execution", async () => {
@@ -404,6 +411,7 @@ describe("Firebase Persistence Failure & Anti-Fallback Hardening", () => {
 
   describe("RTDB to Firestore and Private-State Consistency & Reconciliation Scenarios", () => {
     beforeEach(() => {
+      vi.setSystemTime(FIXED_TEST_TIMESTAMP);
       repository = new ServerGameRepository();
       repository.seedGame(createBaseSession(), createBaseState());
     });

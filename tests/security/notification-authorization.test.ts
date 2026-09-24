@@ -61,7 +61,7 @@ function evaluateNotificationWrite(
 
   // 1. Evaluate .write condition:
   // auth != null && (
-  //   (!data.exists() && newData.child('fromUserId').val() === auth.uid && newData.child('toUserId').val() === $uid && auth.uid !== $uid && newData.hasChild('coupleId') && newData.child('coupleId').isString() && (root.child('couples').child(newData.child('coupleId').val()).child('members').hasChild(auth.uid) || root.child('couples').child(newData.child('coupleId').val()).child('memberIds').hasChild(auth.uid) || root.child('couples').child(newData.child('coupleId').val()).child('memberIds/0').val() === auth.uid || root.child('couples').child(newData.child('coupleId').val()).child('memberIds/1').val() === auth.uid) && (root.child('couples').child(newData.child('coupleId').val()).child('members').hasChild($uid) || root.child('couples').child(newData.child('coupleId').val()).child('memberIds').hasChild($uid) || root.child('couples').child(newData.child('coupleId').val()).child('memberIds/0').val() === $uid || root.child('couples').child(newData.child('coupleId').val()).child('memberIds/1').val() === $uid))
+  //   (!data.exists() && newData.child('fromUserId').val() === auth.uid && newData.child('toUserId').val() === $uid && auth.uid !== $uid && newData.hasChild('coupleId') && newData.child('coupleId').isString() && ((root.child('couples').child(newData.child('coupleId').val()).child('memberIds/0').val() === auth.uid && root.child('couples').child(newData.child('coupleId').val()).child('memberIds/1').val() === $uid) || (root.child('couples').child(newData.child('coupleId').val()).child('memberIds/1').val() === auth.uid && root.child('couples').child(newData.child('coupleId').val()).child('memberIds/0').val() === $uid)) && !root.child('couples').child(newData.child('coupleId').val()).child('memberIds/2').exists() && (root.child('couples').child(newData.child('coupleId').val()).child('members').hasChild(auth.uid) || root.child('couples').child(newData.child('coupleId').val()).child('memberIds').hasChild(auth.uid)) && (root.child('couples').child(newData.child('coupleId').val()).child('members').hasChild($uid) || root.child('couples').child(newData.child('coupleId').val()).child('memberIds').hasChild($uid)))
   //   || (auth.uid === $uid && (!newData.exists() || (newData.child('read').val() === true && newData.child('fromUserId').val() === data.child('fromUserId').val() && newData.child('toUserId').val() === data.child('toUserId').val() && newData.child('coupleId').val() === data.child('coupleId').val())))
   // )
 
@@ -78,20 +78,26 @@ function evaluateNotificationWrite(
       typeof newDataVal.coupleId === "string"
     ) {
       const couple = rootState.couples[newDataVal.coupleId];
-      if (couple) {
-        const senderInCouple =
+      if (couple && Array.isArray(couple.memberIds)) {
+        // Enforce canonical partner derivation from couple membership:
+        // The recipient is provably the authenticated user's actual partner derived from the couple
+        const partnerIsDerived =
+          (couple.memberIds[0] === auth.uid && couple.memberIds[1] === targetUid) ||
+          (couple.memberIds[1] === auth.uid && couple.memberIds[0] === targetUid);
+
+        // Enforce binary couple exclusivity (no 3rd member allowed)
+        const hasNoThirdMember = couple.memberIds[2] === undefined;
+
+        // Verify membership confirmation in members or memberIds
+        const senderConfirmed =
           Boolean(couple.members?.[auth.uid]) ||
-          Boolean(couple.memberIds?.includes(auth.uid)) ||
-          couple.memberIds?.[0] === auth.uid ||
-          couple.memberIds?.[1] === auth.uid;
+          Boolean(couple.memberIds?.includes(auth.uid));
 
-        const recipientInCouple =
+        const recipientConfirmed =
           Boolean(couple.members?.[targetUid]) ||
-          Boolean(couple.memberIds?.includes(targetUid)) ||
-          couple.memberIds?.[0] === targetUid ||
-          couple.memberIds?.[1] === targetUid;
+          Boolean(couple.memberIds?.includes(targetUid));
 
-        if (senderInCouple && recipientInCouple) {
+        if (partnerIsDerived && hasNoThirdMember && senderConfirmed && recipientConfirmed) {
           writeRulePassed = true;
         }
       }
@@ -277,6 +283,17 @@ describe("NOTIFICATION AUTHORIZATION HARDENING: SECURITY RULES & RELATIONSHIP IN
       expect(writeRule).toContain("root.child('couples').child(newData.child('coupleId').val())");
       expect(writeRule).toContain("hasChild(auth.uid)");
       expect(writeRule).toContain("hasChild($uid)");
+    });
+
+    it("verifies write rule derives recipient directly from canonical couple memberIds", () => {
+      const writeRule = notifRules.$uid.$notificationId[".write"];
+      expect(writeRule).toContain("child('memberIds/0').val() === auth.uid && root.child('couples').child(newData.child('coupleId').val()).child('memberIds/1').val() === $uid");
+      expect(writeRule).toContain("child('memberIds/1').val() === auth.uid && root.child('couples').child(newData.child('coupleId').val()).child('memberIds/0').val() === $uid");
+    });
+
+    it("verifies write rule prohibits 3rd member injection into couple space", () => {
+      const writeRule = notifRules.$uid.$notificationId[".write"];
+      expect(writeRule).toContain("!root.child('couples').child(newData.child('coupleId').val()).child('memberIds/2').exists()");
     });
 
     it("verifies validate rule enforces whitelist of valid notification types", () => {
@@ -648,6 +665,354 @@ describe("NOTIFICATION AUTHORIZATION HARDENING: SECURITY RULES & RELATIONSHIP IN
         rootState
       );
       expect(result.allowed).toBe(false);
+    });
+  });
+
+  describe("ADVERSARIAL RULES TESTS: HARDENED CANONICAL RELATIONSHIP DERIVATION", () => {
+    const userMalicious = "user_malicious_attacker";
+    const coupleIdMulti = "cpl_injected_multi_3000";
+    const coupleIdSolo = "cpl_solo_unpaired_4000";
+
+    const adversarialRootState: RtdbRootState = {
+      couples: {
+        ...rootState.couples,
+        [coupleIdMulti]: {
+          memberIds: [userA, userB, userMalicious],
+          members: {
+            [userA]: true,
+            [userB]: true,
+            [userMalicious]: true,
+          },
+        },
+        [coupleIdSolo]: {
+          memberIds: [userA],
+          members: {
+            [userA]: true,
+          },
+        },
+      },
+      notifications: {},
+    };
+
+    describe("Adversarial Attack: Group / Multi-Member Infiltration Bypass", () => {
+      it("denies User A notifying injected 3rd member userMalicious", () => {
+        const payload = {
+          ...validPayload,
+          toUserId: userMalicious,
+          coupleId: coupleIdMulti,
+        };
+
+        const result = evaluateNotificationWrite(
+          userMalicious,
+          payload.id,
+          { uid: userA },
+          payload,
+          null,
+          adversarialRootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+
+      it("denies injected 3rd member userMalicious notifying legitimate partner User B", () => {
+        const payload = {
+          ...validPayload,
+          fromUserId: userMalicious,
+          toUserId: userB,
+          coupleId: coupleIdMulti,
+        };
+
+        const result = evaluateNotificationWrite(
+          userB,
+          payload.id,
+          { uid: userMalicious },
+          payload,
+          null,
+          adversarialRootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+
+      it("denies injected 3rd member userMalicious notifying legitimate partner User A", () => {
+        const payload = {
+          ...validPayload,
+          fromUserId: userMalicious,
+          toUserId: userA,
+          coupleId: coupleIdMulti,
+        };
+
+        const result = evaluateNotificationWrite(
+          userA,
+          payload.id,
+          { uid: userMalicious },
+          payload,
+          null,
+          adversarialRootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+
+      it("denies legitimate partners from notifying each other via a compromised 3-member space", () => {
+        const payload = {
+          ...validPayload,
+          fromUserId: userA,
+          toUserId: userB,
+          coupleId: coupleIdMulti,
+        };
+
+        const result = evaluateNotificationWrite(
+          userB,
+          payload.id,
+          { uid: userA },
+          payload,
+          null,
+          adversarialRootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+    });
+
+    describe("Adversarial Attack: Unpaired / Solo User Pending Invite Bypass", () => {
+      it("denies solo creator User A sending notification to arbitrary user before partner joins", () => {
+        const payload = {
+          ...validPayload,
+          fromUserId: userA,
+          toUserId: userB,
+          coupleId: coupleIdSolo,
+        };
+
+        const result = evaluateNotificationWrite(
+          userB,
+          payload.id,
+          { uid: userA },
+          payload,
+          null,
+          adversarialRootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+
+      it("denies prospective partner User B sending notification to User A before invite acceptance", () => {
+        const payload = {
+          ...validPayload,
+          fromUserId: userB,
+          toUserId: userA,
+          coupleId: coupleIdSolo,
+        };
+
+        const result = evaluateNotificationWrite(
+          userA,
+          payload.id,
+          { uid: userB },
+          payload,
+          null,
+          adversarialRootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+    });
+
+    describe("Adversarial Attack: Cross-Couple Partner Substitution", () => {
+      it("denies User A notifying User D (partner in couple 2) while referencing couple 1", () => {
+        const payload = {
+          ...validPayload,
+          fromUserId: userA,
+          toUserId: userD,
+          coupleId: coupleId1,
+        };
+
+        const result = evaluateNotificationWrite(
+          userD,
+          payload.id,
+          { uid: userA },
+          payload,
+          null,
+          rootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+
+      it("denies User A notifying User D while referencing couple 2 (where User A is not a member)", () => {
+        const payload = {
+          ...validPayload,
+          fromUserId: userA,
+          toUserId: userD,
+          coupleId: coupleId2,
+        };
+
+        const result = evaluateNotificationWrite(
+          userD,
+          payload.id,
+          { uid: userA },
+          payload,
+          null,
+          rootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+
+      it("denies User C notifying User B (partner in couple 1) while referencing couple 2", () => {
+        const payload = {
+          ...validPayload,
+          fromUserId: userC,
+          toUserId: userB,
+          coupleId: coupleId2,
+        };
+
+        const result = evaluateNotificationWrite(
+          userB,
+          payload.id,
+          { uid: userC },
+          payload,
+          null,
+          rootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+    });
+
+    describe("Adversarial Attack: Reverse Notification After Dissolution", () => {
+      it("denies remaining partner User B from notifying former partner User A", () => {
+        const dissolvedRootState: RtdbRootState = {
+          couples: {
+            [coupleId1]: {
+              memberIds: [userB],
+              members: { [userB]: true },
+            },
+          },
+          notifications: {},
+        };
+
+        const payload = {
+          ...validPayload,
+          fromUserId: userB,
+          toUserId: userA,
+          coupleId: coupleId1,
+        };
+
+        const result = evaluateNotificationWrite(
+          userA,
+          payload.id,
+          { uid: userB },
+          payload,
+          null,
+          dissolvedRootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+    });
+
+    describe("Adversarial Attack: Self-Notification Loophole", () => {
+      it("denies User A sending a notification to themselves at notifications/user_sam", () => {
+        const selfPayload = {
+          ...validPayload,
+          fromUserId: userA,
+          toUserId: userA,
+          coupleId: coupleId1,
+        };
+
+        const result = evaluateNotificationWrite(
+          userA,
+          selfPayload.id,
+          { uid: userA },
+          selfPayload,
+          null,
+          rootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+    });
+
+    describe("Adversarial Attack: Tampering with Notification on Read Update", () => {
+      it("denies updating notification with read: false (cannot unread)", () => {
+        const unreadAttempt = {
+          ...validPayload,
+          read: false,
+        };
+
+        const result = evaluateNotificationWrite(
+          userB,
+          validPayload.id,
+          { uid: userB },
+          unreadAttempt,
+          validPayload,
+          rootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+
+      it("denies outsider User C marking User B's notification as read", () => {
+        const readUpdate = {
+          ...validPayload,
+          read: true,
+        };
+
+        const result = evaluateNotificationWrite(
+          userB,
+          validPayload.id,
+          { uid: userC },
+          readUpdate,
+          validPayload,
+          rootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+
+      it("denies sender User A deleting or modifying User B's notification", () => {
+        const result = evaluateNotificationWrite(
+          userB,
+          validPayload.id,
+          { uid: userA },
+          null, // deletion attempt by sender
+          validPayload,
+          rootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+    });
+
+    describe("Adversarial Attack: Malformed Couple Membership in RTDB", () => {
+      it("denies notification when couple memberIds is empty array", () => {
+        const emptyMemberRootState: RtdbRootState = {
+          couples: {
+            [coupleId1]: {
+              memberIds: [],
+              members: {},
+            },
+          },
+          notifications: {},
+        };
+
+        const result = evaluateNotificationWrite(
+          userB,
+          validPayload.id,
+          { uid: userA },
+          validPayload,
+          null,
+          emptyMemberRootState
+        );
+        expect(result.allowed).toBe(false);
+      });
+
+      it("denies notification when couple memberIds is missing", () => {
+        const missingMemberRootState: RtdbRootState = {
+          couples: {
+            [coupleId1]: {
+              members: { [userA]: true, [userB]: true },
+            },
+          },
+          notifications: {},
+        };
+
+        const result = evaluateNotificationWrite(
+          userB,
+          validPayload.id,
+          { uid: userA },
+          validPayload,
+          null,
+          missingMemberRootState
+        );
+        expect(result.allowed).toBe(false);
+      });
     });
   });
 });

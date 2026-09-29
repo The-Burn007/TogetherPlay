@@ -22,13 +22,10 @@ export const SharedEncounterCard: React.FC = () => {
   return (
     <section className="flex flex-col w-full rounded-xl bg-surface-raised border border-subtle-border overflow-hidden shadow-xl relative">
       {/* Editorial Header Banner */}
-      <div className="relative w-full h-44 overflow-hidden bg-surface-deep">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="https://picsum.photos/seed/togetherplay-encounter-art/800/400"
-          alt="Tonight's encounter backdrop"
-          className="w-full h-full object-cover opacity-80"
-        />
+      <div className="relative w-full h-44 overflow-hidden bg-[#111A14] flex items-center justify-center">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(24,37,29,0.9)_0%,rgba(17,26,20,1)_100%)]" />
+        <div className="absolute -left-10 top-0 w-48 h-full bg-player-one-ember/20 blur-2xl" />
+        <div className="absolute -right-10 bottom-0 w-48 h-full bg-brand/20 blur-2xl" />
         <div className="absolute inset-0 bg-gradient-to-t from-surface-raised via-surface-raised/40 to-transparent" />
 
         {/* Live Streak Badge */}

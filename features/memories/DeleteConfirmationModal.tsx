@@ -36,7 +36,7 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
   return (
     <div
       id="delete-memory-modal-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface-deep/80 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background-canvas/80 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <div
@@ -44,17 +44,17 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
         role="dialog"
         aria-modal="true"
         aria-labelledby="delete-memory-title"
-        className="relative w-full max-w-md bg-surface-raised border border-subtle-border rounded-2xl p-6 shadow-2xl space-y-5"
+        className="relative w-full max-w-md bg-surface border border-border rounded-2xl p-6 shadow-elevation-lg space-y-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between">
-          <div className="w-10 h-10 rounded-full bg-player-one-ember/15 border border-player-one-ember/30 flex items-center justify-center text-player-one-ember">
+          <div className="w-10 h-10 rounded-xl bg-danger/15 border border-danger/30 flex items-center justify-center text-danger">
             <AlertTriangle className="w-5 h-5" />
           </div>
           <button
             onClick={onClose}
             disabled={isDeleting}
-            className="p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-deep transition-colors"
+            className="p-1 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-raised transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -63,21 +63,21 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
         <div className="space-y-2">
           <h3
             id="delete-memory-title"
-            className="text-lg font-semibold text-on-surface tracking-tight"
+            className="text-lg font-display font-medium text-text-primary tracking-tight"
           >
             Remove from Couple Archive?
           </h3>
-          <p className="text-xs text-on-surface-variant leading-relaxed">
-            Are you sure you want to remove <span className="font-semibold text-on-surface">&ldquo;{memory.title}&rdquo;</span>? This memory artifact and its private media will be permanently deleted from both partners&apos; timeline.
+          <p className="text-xs text-text-secondary leading-relaxed">
+            Are you sure you want to remove <span className="font-semibold text-text-primary">&ldquo;{memory.title}&rdquo;</span>? This memory artifact and its private media will be permanently deleted from both partners&apos; timeline.
           </p>
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-2">
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
           <button
             type="button"
             onClick={onClose}
             disabled={isDeleting}
-            className="px-4 py-2 rounded-xl text-xs font-mono bg-surface-deep border border-subtle-border text-on-surface hover:bg-surface-container transition-colors"
+            className="px-4 py-2 rounded-xl text-xs font-mono bg-surface-raised border border-border text-text-primary hover:bg-surface-overlay transition-colors cursor-pointer"
           >
             Keep Memory
           </button>
@@ -86,7 +86,7 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
             id="confirm-delete-memory-btn"
             onClick={handleConfirm}
             disabled={isDeleting}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-mono bg-player-one-ember text-canvas-cream font-medium hover:brightness-110 disabled:opacity-50 transition-all shadow-sm"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-mono bg-danger hover:brightness-110 text-text-primary font-medium disabled:opacity-50 transition-all shadow-sm cursor-pointer"
           >
             {isDeleting ? (
               <>

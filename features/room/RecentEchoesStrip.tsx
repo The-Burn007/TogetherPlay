@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Play, Pause } from "lucide-react";
+import { Play, Pause, Trophy, Camera } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 
 export const RecentEchoesStrip: React.FC = () => {
@@ -30,14 +30,12 @@ export const RecentEchoesStrip: React.FC = () => {
       <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-none snap-x snap-mandatory">
         {/* Card 1: Yesterday's Photo Duel */}
         <div className="min-w-[220px] snap-start flex flex-col rounded-xl bg-surface-raised border border-subtle-border p-3 shadow-md">
-          <div className="w-full h-28 rounded-lg overflow-hidden relative bg-surface-deep">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="https://picsum.photos/seed/togetherplay-snap-finish/400/250"
-              alt="Speed Duel finished"
-              className="w-full h-full object-cover"
-            />
-            <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded bg-surface-deep/90 backdrop-blur font-mono text-[9px] text-canvas-cream font-medium">
+          <div className="w-full h-28 rounded-lg overflow-hidden relative bg-[#111A14] flex flex-col items-center justify-center p-2 text-center border border-border">
+            <div className="w-10 h-10 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center text-brand mb-1 shadow-sm">
+              <Trophy className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] font-mono text-brand font-semibold">Speed Duel Final</span>
+            <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded bg-surface/90 backdrop-blur font-mono text-[9px] text-canvas-cream font-medium">
               Yesterday
             </span>
           </div>
@@ -94,14 +92,12 @@ export const RecentEchoesStrip: React.FC = () => {
 
         {/* Card 3: Camera Flash Snap */}
         <div className="min-w-[220px] snap-start flex flex-col rounded-xl bg-surface-raised border border-subtle-border p-3 shadow-md">
-          <div className="w-full h-28 rounded-lg overflow-hidden relative bg-surface-deep">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="https://picsum.photos/seed/togetherplay-yellow-snap/400/250"
-              alt="Snap yellow challenge"
-              className="w-full h-full object-cover"
-            />
-            <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded bg-surface-deep/90 backdrop-blur font-mono text-[9px] text-shared-amber font-semibold">
+          <div className="w-full h-28 rounded-lg overflow-hidden relative bg-[#111A14] flex flex-col items-center justify-center p-2 text-center border border-border">
+            <div className="w-10 h-10 rounded-full bg-player-two-sage/20 border border-player-two-sage/40 flex items-center justify-center text-player-two-sage mb-1 shadow-sm">
+              <Camera className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] font-mono text-player-two-sage font-semibold">Tokyo Morning Snap</span>
+            <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded bg-surface/90 backdrop-blur font-mono text-[9px] text-brand font-semibold">
               Challenge
             </span>
           </div>

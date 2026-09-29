@@ -51,7 +51,7 @@ export const ResonanceNode: React.FC = () => {
               colorRole="ember"
               size="lg"
               isOnline={true}
-              imageUrl="https://picsum.photos/seed/alex-profile-london/200/200"
+              imageUrl={undefined}
             />
             <div className="text-center">
               <span className="text-sm font-semibold text-on-surface">Alex</span>
@@ -87,7 +87,7 @@ export const ResonanceNode: React.FC = () => {
               colorRole="sage"
               size="lg"
               isOnline={true}
-              imageUrl="https://picsum.photos/seed/sam-profile-tokyo/200/200"
+              imageUrl={undefined}
             />
             <div className="text-center">
               <span className="text-sm font-semibold text-on-surface">Sam</span>

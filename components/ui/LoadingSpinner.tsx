@@ -24,30 +24,30 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   return (
     <div className={cn("flex flex-col items-center justify-center gap-3.5 p-6 select-none", className)}>
       <div className={cn("relative flex items-center justify-center", sizeMap[size])}>
-        {/* Ember Ring (Player 1) */}
+        {/* Primary Sanctuary Outer Ring */}
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 2.2, repeat: Infinity, ease: "linear" }}
-          className="absolute inset-0 rounded-full border-2 border-player-one-ember/30 border-t-player-one-ember"
+          className="absolute inset-0 rounded-full border-2 border-brand/20 border-t-brand"
         />
 
-        {/* Sage Ring (Player 2) */}
+        {/* Secondary Inner Ring */}
         <motion.div
           animate={{ rotate: -360 }}
           transition={{ duration: 2.8, repeat: Infinity, ease: "linear" }}
-          className="absolute inset-1.5 rounded-full border-2 border-player-two-sage/30 border-b-player-two-sage"
+          className="absolute inset-1.5 rounded-full border-2 border-border-strong border-b-brand/70"
         />
 
-        {/* Amber Shared Core (Resonance) */}
+        {/* Acid Mint Shared Core */}
         <motion.div
-          animate={{ scale: [0.8, 1.3, 0.8], opacity: [0.6, 1, 0.6] }}
+          animate={{ scale: [0.8, 1.25, 0.8], opacity: [0.6, 1, 0.6] }}
           transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-          className="w-2 h-2 rounded-full bg-shared-amber shadow-[0_0_10px_rgba(217,155,56,0.6)]"
+          className="w-2 h-2 rounded-full bg-brand shadow-mint-glow"
         />
       </div>
 
       {label ? (
-        <span className="text-[11px] tracking-widest uppercase font-mono text-on-surface-variant animate-pulse">
+        <span className="text-[11px] tracking-widest uppercase font-mono text-text-muted animate-pulse">
           {label}
         </span>
       ) : null}

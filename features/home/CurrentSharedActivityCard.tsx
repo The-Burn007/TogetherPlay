@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, Flame, Timer, PhoneCall, Gamepad2, Moon, Sparkles } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
+import { ArrowRight, Flame, Gamepad2, PhoneCall, Moon, Sparkles, Clock, Compass } from "lucide-react";
 import type { HomeActivityData } from "@/lib/firebase/services/home";
 
 export interface CurrentSharedActivityCardProps {
@@ -35,94 +34,103 @@ export const CurrentSharedActivityCard: React.FC<CurrentSharedActivityCardProps>
   const renderIcon = () => {
     switch (activity.type) {
       case "game":
-        return <Gamepad2 className="w-4 h-4 text-shared-amber" />;
+        return <Gamepad2 className="w-4 h-4 text-cream" />;
       case "call":
-        return <PhoneCall className="w-4 h-4 text-player-two-sage" />;
+        return <PhoneCall className="w-4 h-4 text-cream" />;
       case "quiet":
-        return <Moon className="w-4 h-4 text-on-surface-variant" />;
+        return <Moon className="w-4 h-4 text-soft-sage" />;
       case "awaiting_partner":
-        return <Sparkles className="w-4 h-4 text-player-two-sage" />;
+        return <Sparkles className="w-4 h-4 text-cream" />;
       default:
-        return <Timer className="w-4 h-4 text-shared-amber" />;
+        return <Clock className="w-4 h-4 text-cream" />;
     }
   };
 
   return (
-    <section className="flex flex-col w-full rounded-2xl bg-surface-raised border border-subtle-border overflow-hidden shadow-xl relative">
-      {/* Editorial Header Banner */}
-      <div className="relative w-full h-44 overflow-hidden bg-surface-deep">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={
-            activity.type === "quiet"
-              ? "https://picsum.photos/seed/togetherplay-night-quiet/800/400"
-              : activity.type === "call"
-              ? "https://picsum.photos/seed/togetherplay-audio-sanctuary/800/400"
-              : activity.type === "awaiting_partner"
-              ? "https://picsum.photos/seed/togetherplay-new-space/800/400"
-              : "https://picsum.photos/seed/togetherplay-encounter-art/800/400"
-          }
-          alt={activity.title}
-          className="w-full h-full object-cover opacity-75"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-surface-raised via-surface-raised/40 to-transparent" />
+    <section className="relative w-full rounded-3xl bg-surface border border-border/80 overflow-hidden shadow-elevation-md group">
+      {/* Bespoke Styled Atmospheric Sanctuary Horizon Canvas (Zero Broken Image Fallback) */}
+      <div className="relative w-full h-48 sm:h-56 overflow-hidden bg-surface-charcoal flex items-center justify-center select-none">
+        {/* Abstract Architectural Atmospheric Sky Mesh */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_25%_40%,rgba(37,40,33,0.85)_0%,rgba(17,25,19,0.95)_100%)]" />
+        
+        {/* London Dusk (West Ember Glow) to Tokyo Dawn (East Light Horizon) */}
+        <div className="absolute -left-20 top-0 w-80 h-full bg-player-one-ember/15 blur-3xl pointer-events-none" />
+        <div className="absolute -right-20 bottom-0 w-80 h-full bg-soft-sage/10 blur-3xl pointer-events-none" />
+        
+        {/* Subtle Meridian Latitude Grid Lines */}
+        <svg className="absolute inset-0 w-full h-full opacity-15 pointer-events-none" aria-hidden="true">
+          <defs>
+            <pattern id="meridian-grid" width="48" height="48" patternUnits="userSpaceOnUse">
+              <path d="M 48 0 L 0 0 0 48" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-soft-sage/30" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#meridian-grid)" />
+          {/* Luminous Connecting Thread across the continents */}
+          <path d="M 0 100 Q 250 40 500 110 T 1000 80" fill="none" stroke="#F3EDE0" strokeWidth="1" strokeDasharray="4 6" opacity="0.4" />
+        </svg>
 
-        {/* Milestone Streak Pill */}
-        <div className="absolute top-3.5 left-3.5 flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-deep/80 backdrop-blur-md border border-subtle-border shadow-sm">
-          <Flame className="w-3.5 h-3.5 text-shared-amber fill-shared-amber" />
-          <span className="text-[10px] font-mono text-canvas-cream uppercase tracking-wider font-semibold">
-            Day {daysTogether} Together
+        {/* Central Hemisphere Waypoint Seal */}
+        <div className="relative z-10 flex flex-col items-center justify-center text-center px-4 space-y-1">
+          <div className="w-12 h-12 rounded-2xl bg-surface/80 border border-border flex items-center justify-center text-cream mb-1">
+            <Compass className="w-6 h-6 animate-pulse" />
+          </div>
+          <span className="text-[11px] font-mono text-soft-sage uppercase tracking-widest font-semibold">
+            London 51.5°N ⇄ Tokyo 35.6°N
+          </span>
+          <span className="text-xs text-soft-sage/80 font-mono">
+            9,560 KM Transcontinental Horizon
           </span>
         </div>
 
-        {/* Activity Live Status Badge */}
-        <div className="absolute top-3.5 right-3.5">
-          <Badge variant={activity.badgeVariant} size="sm">
-            {activity.badgeLabel}
-          </Badge>
+        {/* Dark Vignette Overlay for Crisp WCAG AA Contrast */}
+        <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent pointer-events-none" />
+
+        {/* Milestone Streak & Status Readout (Clean unboxed metadata) */}
+        <div className="absolute top-4 inset-x-4 sm:inset-x-6 flex items-center justify-between z-20 text-xs font-mono">
+          <div className="flex items-center gap-1.5 text-text-secondary bg-surface/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-border">
+            <Flame className="w-3.5 h-3.5 text-player-one-ember" />
+            <span className="font-tabular font-medium text-cream">Day {daysTogether} Together</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-cream bg-surface/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-border">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
+            <span className="uppercase tracking-wider text-[10px] font-semibold">{activity.badgeLabel}</span>
+          </div>
         </div>
 
-        {/* Banner Title & Category Eyebrow */}
-        <div className="absolute bottom-3 inset-x-4 sm:inset-x-5">
-          <span className="text-[10px] font-mono text-shared-amber uppercase tracking-widest font-semibold flex items-center gap-1.5">
+        {/* Narrative Title: What Can We Do Together Now? */}
+        <div className="absolute bottom-3 inset-x-4 sm:inset-x-6 z-20">
+          <div className="flex items-center gap-2 text-[11px] font-mono text-soft-sage uppercase tracking-wider font-semibold">
             {renderIcon()}
-            <span>Current Shared Activity</span>
-          </span>
-          <h2 className="text-xl sm:text-2xl font-bold text-on-surface leading-tight mt-1">
+            <span>Active Shared Horizon</span>
+          </div>
+          <h2 className="font-display text-xl sm:text-2xl text-cream tracking-tight mt-0.5">
             {activity.title}
           </h2>
         </div>
       </div>
 
-      {/* Body & Primary CTA Action */}
-      <div className="p-4 sm:p-5 flex flex-col gap-4">
-        <p className="text-xs sm:text-sm text-on-surface-variant leading-relaxed">
+      {/* Narrative Body & Primary Action CTA */}
+      <div className="p-5 sm:p-6 flex flex-col gap-4">
+        <p className="text-xs sm:text-sm text-text-secondary leading-relaxed">
           {activity.subtitle}
         </p>
 
-        {/* Primary Interaction Button */}
+        {/* Action Button */}
         <Link
           href={activity.actionHref}
-          className={`w-full py-3.5 px-4 rounded-xl font-semibold tracking-tight shadow-lg transition-all flex items-center justify-between group active:scale-[0.99] ${
-            activity.type === "call"
-              ? "bg-player-two-sage hover:bg-[#86a87e] text-surface-deep"
-              : activity.type === "quiet"
-              ? "bg-surface-overlay hover:bg-surface-container border border-subtle-border text-on-surface"
-              : activity.type === "awaiting_partner"
-              ? "bg-player-two-sage hover:bg-[#86a87e] text-surface-deep"
-              : "bg-shared-amber hover:bg-[#e6a847] text-surface-deep"
-          }`}
+          className="w-full py-3.5 px-5 rounded-xl bg-brand text-text-on-mint hover:bg-brand-hover font-semibold text-sm tracking-tight shadow-sm transition-all flex items-center justify-between group/btn active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-brand cursor-pointer"
         >
           <div className="flex items-center gap-2.5">
             {activity.type === "game" || activity.type === "call" || activity.type === "synced" ? (
-              <span className="w-2.5 h-2.5 rounded-full bg-current animate-ping" />
+              <span className="w-2 h-2 rounded-full bg-text-on-mint animate-pulse" />
             ) : null}
-            <span className="text-sm font-semibold">{activity.actionLabel}</span>
+            <span>{activity.actionLabel}</span>
           </div>
 
-          <div className="flex items-center gap-1.5 text-xs font-mono uppercase bg-black/15 px-2.5 py-1 rounded-md font-bold">
-            {timeFormatted ? <span>{timeFormatted}</span> : null}
-            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+          <div className="flex items-center gap-2 text-xs font-mono font-bold bg-text-on-mint/15 px-2.5 py-1 rounded-lg">
+            {timeFormatted ? <span className="font-tabular">{timeFormatted}</span> : null}
+            <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-1 transition-transform" />
           </div>
         </Link>
       </div>

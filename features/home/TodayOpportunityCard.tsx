@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Zap, Lock, Unlock, Sparkles, Send } from "lucide-react";
+import { Sparkles, Lock, Unlock, Send } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import type { HomeChallengeData } from "@/lib/firebase/services/home";
 
@@ -25,54 +25,47 @@ export const TodayOpportunityCard: React.FC<TodayOpportunityCardProps> = ({
     if (!answer.trim()) return;
     setRevealed(true);
     showToast({
-      message: `Dual spark unlocked with ${partnerName}! Synchrony recorded.`,
+      message: `Answer sealed and revealed with ${partnerName}! Synchrony recorded.`,
       variant: "success",
     });
   };
 
   return (
-    <section className="flex flex-col w-full rounded-2xl bg-surface-raised border border-subtle-border p-5 sm:p-6 shadow-md space-y-4">
-      {/* Header */}
+    <section className="relative w-full rounded-3xl bg-surface border border-border/80 p-6 sm:p-7 shadow-elevation-md space-y-4">
+      {/* Header: Quiet invitation label */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-player-one-ember/15 flex items-center justify-center text-player-one-ember">
-            <Zap className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-on-surface">
-              Today&apos;s Opportunity to Connect
-            </h3>
-            <p className="text-[10px] font-mono text-on-surface-variant uppercase tracking-wider">
-              Daily Connection Spark
-            </p>
-          </div>
+          <Sparkles className="w-4 h-4 text-soft-stone" />
+          <h3 className="text-sm font-semibold text-warm-cream tracking-tight">
+            Today&apos;s Small Invitation
+          </h3>
         </div>
 
-        <span className="text-[11px] font-mono text-shared-amber bg-shared-amber/10 border border-shared-amber/30 px-2.5 py-0.5 rounded-full font-medium">
-          Daily Ritual
+        <span className="text-[11px] font-mono text-soft-sage font-medium">
+          Daily Spark
         </span>
       </div>
 
-      {/* Main Question & Interaction Box */}
-      <div className="p-4 sm:p-5 rounded-xl bg-surface-deep border border-subtle-border space-y-3.5">
-        <p className="text-sm sm:text-base text-canvas-cream font-medium leading-relaxed">
+      {/* The Question Prompt: Editorial Fraunces Display with Warm Charcoal Surface */}
+      <div className="p-5 rounded-2xl bg-surface-charcoal border border-border/80 space-y-4">
+        <blockquote className="font-display text-base sm:text-lg text-warm-cream leading-relaxed italic">
           &ldquo;{challenge.question}&rdquo;
-        </p>
+        </blockquote>
 
-        {/* Partner Sealed / Locked Status */}
+        {/* Partner Sealed / Reciprocal Status */}
         {isNewCouple ? (
-          <div className="p-3 rounded-lg bg-surface-container border border-subtle-border flex items-center gap-2.5 text-xs text-on-surface-variant">
-            <Sparkles className="w-4 h-4 text-shared-amber" />
-            <span>Once your partner enters, your daily sparks will reveal reciprocally.</span>
+          <div className="p-3 rounded-xl bg-surface border border-border flex items-center gap-2 text-xs text-soft-sage">
+            <Sparkles className="w-3.5 h-3.5 text-soft-stone shrink-0" />
+            <span>Once your partner joins, your daily sparks will reveal reciprocally.</span>
           </div>
         ) : (
-          <div className="p-3 rounded-lg bg-surface-container border border-subtle-border flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
+          <div className="p-3.5 rounded-xl bg-surface border border-border flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
                   revealed
-                    ? "bg-player-two-sage/20 text-player-two-sage"
-                    : "bg-surface-raised text-on-surface-variant"
+                    ? "bg-brand/15 text-brand border border-brand/30"
+                    : "bg-surface-secondary text-soft-sage border border-border"
                 }`}
               >
                 {revealed ? (
@@ -83,16 +76,16 @@ export const TodayOpportunityCard: React.FC<TodayOpportunityCardProps> = ({
               </div>
 
               {revealed ? (
-                <div className="flex flex-col">
-                  <span className="text-xs text-player-two-sage font-medium">
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs text-warm-cream font-medium truncate">
                     {partnerName}: &ldquo;{challenge.partnerAnswer || "Bon Iver — Holocene on that foggy highway exit"}&rdquo;
                   </span>
                 </div>
               ) : (
-                <div className="flex flex-col">
-                  <span className="text-xs text-on-surface-variant italic">
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs text-soft-stone truncate">
                     {challenge.partnerAnswered
-                      ? `${partnerName} sealed an answer ${challenge.partnerAnsweredAgo || "recently"}`
+                      ? `${partnerName} sealed an answer ${challenge.partnerAnsweredAgo || "earlier today"}`
                       : `${partnerName} hasn't answered yet today`}
                   </span>
                 </div>
@@ -100,24 +93,22 @@ export const TodayOpportunityCard: React.FC<TodayOpportunityCardProps> = ({
             </div>
 
             <span
-              className={`text-[10px] font-mono uppercase tracking-wider ${
-                revealed
-                  ? "text-player-two-sage font-bold"
-                  : "text-on-surface-variant"
+              className={`text-[10px] font-mono uppercase tracking-wider shrink-0 font-medium ${
+                revealed ? "text-brand" : "text-soft-sage"
               }`}
             >
-              {revealed ? "Unlocked" : "Locked"}
+              {revealed ? "Revealed" : "Sealed"}
             </span>
           </div>
         )}
 
         {/* User Answer Interactive Form */}
         {revealed ? (
-          <div className="p-3 rounded-lg bg-surface-raised border border-player-one-ember/40 text-xs text-player-one-ember">
-            <span className="font-semibold block text-[10px] uppercase font-mono tracking-wider opacity-80 mb-0.5">
-              Your Answer:
+          <div className="p-3.5 rounded-xl bg-surface-secondary border border-border text-xs">
+            <span className="text-[10px] uppercase font-mono tracking-wider text-soft-sage block mb-0.5">
+              Your Truth:
             </span>
-            <span className="font-medium">&ldquo;{answer}&rdquo;</span>
+            <span className="text-warm-cream font-medium">&ldquo;{answer}&rdquo;</span>
           </div>
         ) : !isNewCouple ? (
           <form onSubmit={handleReveal} className="relative flex items-center pt-1">
@@ -125,13 +116,13 @@ export const TodayOpportunityCard: React.FC<TodayOpportunityCardProps> = ({
               type="text"
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
-              placeholder={`Type your answer to reveal ${partnerName}'s...`}
-              className="w-full py-3 pl-3.5 pr-26 rounded-lg bg-surface-container-low border border-subtle-border text-on-surface placeholder:text-on-surface-variant/50 text-xs focus:outline-none focus:border-player-one-ember transition-colors"
+              placeholder={`Write your truth to reveal ${partnerName}'s...`}
+              className="w-full py-2.5 pl-3.5 pr-28 rounded-xl bg-surface border border-border text-warm-cream placeholder:text-soft-sage text-xs focus-visible:outline-2 focus-visible:outline-brand transition-colors"
             />
             <button
               type="submit"
               disabled={!answer.trim()}
-              className="absolute right-1.5 px-3.5 py-1.5 rounded-md bg-player-one-ember text-canvas-cream text-[11px] font-mono uppercase font-bold tracking-wider hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 flex items-center gap-1.5 cursor-pointer"
+              className="absolute right-1 px-3 py-1.5 rounded-lg bg-brand text-text-on-mint text-[11px] font-semibold tracking-tight hover:bg-brand-hover active:scale-95 transition-all disabled:opacity-40 flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-brand"
             >
               <span>Reveal</span>
               <Send className="w-3 h-3" />

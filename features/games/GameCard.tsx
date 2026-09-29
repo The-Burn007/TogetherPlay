@@ -85,13 +85,11 @@ export const GameCard: React.FC<GameCardProps> = ({
               </span>
             </div>
           </div>
-          <div className="col-span-2 h-20 rounded-lg overflow-hidden border border-subtle-border bg-surface-deep">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="https://picsum.photos/seed/togetherplay-findit/300/200"
-              alt="Find It First Preview"
-              className="w-full h-full object-cover"
-            />
+          <div className="col-span-2 h-20 rounded-lg overflow-hidden border border-border bg-background flex flex-col items-center justify-center p-2 text-center relative">
+            <div className="w-8 h-8 rounded-lg bg-surface border border-brand/40 flex items-center justify-center text-brand mb-0.5">
+              <Camera className="w-4 h-4" />
+            </div>
+            <span className="text-[9px] font-mono text-brand">Search Reticle</span>
           </div>
         </div>
       ) : customVisual === "couple_race" ? (

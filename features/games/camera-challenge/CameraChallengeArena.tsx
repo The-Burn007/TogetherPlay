@@ -672,10 +672,10 @@ export const CameraChallengeArena: React.FC<CameraChallengeArenaProps> = ({
 
               <Button
                 id="start-countdown-button"
-                variant="amber"
+                variant="brand"
                 size="lg"
                 onClick={handleStartCountdown}
-                className="w-full sm:w-auto shadow-xl shadow-amber-950/40 text-sm font-semibold"
+                className="w-full sm:w-auto shadow-elevation-md text-sm font-semibold"
               >
                 <Play className="w-4 h-4 mr-2 fill-current" />
                 Start Challenge
@@ -684,7 +684,7 @@ export const CameraChallengeArena: React.FC<CameraChallengeArenaProps> = ({
           )}
 
           {stage === "countdown" && (
-            <div className="text-xs uppercase tracking-widest text-amber-300 font-semibold animate-pulse py-2">
+            <div className="text-xs uppercase tracking-widest text-brand font-semibold animate-pulse py-2">
               Event Commencing...
             </div>
           )}
@@ -692,7 +692,7 @@ export const CameraChallengeArena: React.FC<CameraChallengeArenaProps> = ({
           {stage === "perform" && (
             <div className="flex items-center space-x-3 w-full sm:w-auto">
               {/* Perform Timer Ring */}
-              <div className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs font-mono text-amber-300">
+              <div className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-mono text-brand">
                 <span>TIME:</span>
                 <span className="font-bold text-sm">{performSecondsRemaining}s</span>
               </div>
@@ -702,7 +702,7 @@ export const CameraChallengeArena: React.FC<CameraChallengeArenaProps> = ({
                 variant="outline"
                 size="md"
                 onClick={handleSkip}
-                className="text-xs text-neutral-300 hover:text-white"
+                className="text-xs text-text-muted hover:text-text-primary"
                 title="Skip challenge"
               >
                 <FastForward className="w-3.5 h-3.5 mr-1" />
@@ -711,14 +711,14 @@ export const CameraChallengeArena: React.FC<CameraChallengeArenaProps> = ({
 
               <Button
                 id="lock-in-button"
-                variant="amber"
+                variant="brand"
                 size="lg"
                 onClick={handleLockIn}
                 disabled={isMySubmissionDone || isSubmitting}
-                className={`w-full sm:w-auto shadow-lg transition-all ${
+                className={`w-full sm:w-auto shadow-elevation-md transition-all ${
                   isMySubmissionDone
-                    ? "bg-emerald-600 text-white cursor-default"
-                    : "shadow-amber-950/40"
+                    ? "bg-brand text-text-on-mint cursor-default"
+                    : "shadow-mint-glow"
                 }`}
               >
                 {isMySubmissionDone ? (

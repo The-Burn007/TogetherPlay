@@ -209,7 +209,7 @@ export default function DesignSystemPage() {
               isOnline={true}
               city="London"
               time="23:24"
-              imageUrl="https://picsum.photos/seed/alex-profile-london/200/200"
+              imageUrl={undefined}
             />
             <DualPartnerPill
               partnerOneName="Alex"
@@ -223,7 +223,7 @@ export default function DesignSystemPage() {
               isOnline={true}
               city="Tokyo"
               time="07:24"
-              imageUrl="https://picsum.photos/seed/sam-profile-tokyo/200/200"
+              imageUrl={undefined}
             />
           </div>
 

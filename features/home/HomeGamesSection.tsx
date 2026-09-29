@@ -2,14 +2,98 @@
 
 import React from "react";
 import Link from "next/link";
-import { Gamepad2, Play, Sparkles, ArrowRight, Clock } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
+import {
+  Gamepad2,
+  Play,
+  ArrowRight,
+  Camera,
+  Zap,
+  Compass,
+  Video,
+  Sparkles,
+  Layers,
+  Clock,
+} from "lucide-react";
 import type { HomeContinueGameData, HomeSuggestedGameData } from "@/lib/firebase/services/home";
 
 export interface HomeGamesSectionProps {
   continueGame: HomeContinueGameData | null;
   suggestedGame: HomeSuggestedGameData;
 }
+
+interface GameExperienceHighlight {
+  id: string;
+  title: string;
+  cue: string;
+  duration: string;
+  playStyle: string;
+  accent: string;
+  href: string;
+  icon: React.ElementType;
+}
+
+const TOGETHERPLAY_SIX_EXPERIENCES: GameExperienceHighlight[] = [
+  {
+    id: "find_it_first",
+    title: "Find It First",
+    cue: "Dual-camera real-world artifact search across London & Tokyo",
+    duration: "4 mins",
+    playStyle: "Object Vision Duel",
+    accent: "text-soft-stone",
+    href: "/play/find-it-first",
+    icon: Camera,
+  },
+  {
+    id: "speed_duel",
+    title: "Speed Duel",
+    cue: "High-tension audio tone shifts and millisecond sensory reflex",
+    duration: "3 mins",
+    playStyle: "Reflex Tension",
+    accent: "text-warning",
+    href: "/play/speed-duel",
+    icon: Zap,
+  },
+  {
+    id: "couple_race",
+    title: "Couple Race",
+    cue: "The Great Meridian expedition across 9,560 km coordinates",
+    duration: "8 mins",
+    playStyle: "Cooperative Journey",
+    accent: "text-soft-sage",
+    href: "/play/couple_race",
+    icon: Compass,
+  },
+  {
+    id: "camera_challenge",
+    title: "Camera Challenge",
+    cue: "Spontaneous mirror poses and reciprocal live gestures",
+    duration: "3 mins",
+    playStyle: "Live Video Event",
+    accent: "text-info",
+    href: "/play/camera-challenge",
+    icon: Video,
+  },
+  {
+    id: "ai_challenge",
+    title: "AI Challenge",
+    cue: "Gemini-crafted dynamic quest adapted to your shared history",
+    duration: "5 mins",
+    playStyle: "Generative Quest",
+    accent: "text-soft-stone",
+    href: "/play/ai_challenge",
+    icon: Sparkles,
+  },
+  {
+    id: "ai_game_night",
+    title: "AI Game Night",
+    cue: "Curated 5-round private evening anthology for two",
+    duration: "15 mins",
+    playStyle: "Private Evening",
+    accent: "text-soft-sage",
+    href: "/play/ai_game_night",
+    icon: Layers,
+  },
+];
 
 export const HomeGamesSection: React.FC<HomeGamesSectionProps> = ({
   continueGame,
@@ -20,133 +104,135 @@ export const HomeGamesSection: React.FC<HomeGamesSectionProps> = ({
       {/* Section Header */}
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
-          <Gamepad2 className="w-4 h-4 text-shared-amber" />
-          <h3 className="text-sm font-semibold text-on-surface">Games</h3>
+          <Gamepad2 className="w-4 h-4 text-soft-stone" />
+          <h3 className="text-sm font-semibold text-warm-cream tracking-tight">
+            Play Anthology
+          </h3>
         </div>
         <Link
           href="/play"
-          className="text-xs font-mono text-shared-amber hover:underline tracking-wider flex items-center gap-1"
+          className="text-xs font-mono text-soft-stone hover:text-warm-cream flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-brand transition-colors"
         >
           <span>Catalog (6)</span>
-          <ArrowRight className="w-3 h-3" />
+          <ArrowRight className="w-3.5 h-3.5" />
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        {/* 1. Continue Game Sub-module */}
-        {continueGame ? (
-          <div className="p-4 sm:p-5 rounded-2xl bg-surface-raised border border-subtle-border shadow-md flex flex-col gap-3.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-player-two-sage font-bold flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-player-two-sage animate-pulse" />
-                Continue Game
-              </span>
-              <Badge variant="sage" size="sm">
-                In Progress
-              </Badge>
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h4 className="text-base font-semibold text-on-surface">
-                  {continueGame.title}
-                </h4>
-                <p className="text-xs text-on-surface-variant mt-0.5">
-                  {continueGame.subtitle} · <span className="text-player-two-sage">{continueGame.roundLabel}</span>
-                </p>
-              </div>
-
-              <Link
-                href={continueGame.href}
-                className="self-start sm:self-auto px-4 py-2 rounded-xl bg-player-two-sage hover:bg-[#86a87e] text-surface-deep font-semibold text-xs tracking-tight transition-all active:scale-95 flex items-center gap-1.5"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>{continueGame.actionLabel}</span>
-              </Link>
-            </div>
-
-            {/* Subtle Progress Track */}
-            <div className="w-full bg-surface-deep rounded-full h-1.5 overflow-hidden">
-              <div
-                className="bg-player-two-sage h-full rounded-full transition-all"
-                style={{ width: `${continueGame.progressPercent}%` }}
-              />
-            </div>
-          </div>
-        ) : (
-          /* Meaningful State: No Previous Games */
-          <div className="p-5 sm:p-6 rounded-2xl bg-surface-raised/60 border border-dashed border-subtle-border text-center flex flex-col items-center justify-center gap-2.5">
-            <div className="w-10 h-10 rounded-full bg-surface-overlay flex items-center justify-center text-on-surface-variant">
-              <Gamepad2 className="w-5 h-5 opacity-70" />
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-on-surface">
-                No previous games yet
-              </h4>
-              <p className="text-xs text-on-surface-variant max-w-sm mt-0.5">
-                Play your very first duel together to start your shared couple chronicle and unlock collaborative memories.
-              </p>
-            </div>
-            <Link
-              href="/play"
-              className="mt-1 px-4 py-2 rounded-xl bg-shared-amber hover:bg-[#e6a847] text-surface-deep font-semibold text-xs transition-all active:scale-95 flex items-center gap-1.5"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Start First Game</span>
-            </Link>
-          </div>
-        )}
-
-        {/* 2. Suggested Game Sub-module */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-surface-raised border border-subtle-border shadow-md flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-shared-amber font-bold">
-              Suggested Game
+      {/* 1. Continue Session (When in-progress game exists) */}
+      {continueGame && (
+        <div className="p-5 sm:p-6 rounded-3xl bg-surface border border-border/80 shadow-elevation-sm flex flex-col gap-3">
+          <div className="flex items-center justify-between text-xs font-mono">
+            <span className="text-warm-cream font-medium flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
+              Active Game Session
             </span>
-            <span className="text-xs font-mono text-player-two-sage font-semibold">
-              {suggestedGame.affinityBonus}
-            </span>
+            <span className="text-soft-sage">{continueGame.roundLabel}</span>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h4 className="text-base font-semibold text-on-surface">
-                  {suggestedGame.title}
-                </h4>
-                <Badge variant={suggestedGame.badgeVariant} size="sm">
-                  {suggestedGame.badgeLabel}
-                </Badge>
-              </div>
-              <p className="text-xs text-on-surface-variant line-clamp-2">
-                {suggestedGame.description}
+            <div>
+              <h4 className="font-display text-base sm:text-lg text-warm-cream">
+                {continueGame.title}
+              </h4>
+              <p className="text-xs text-soft-stone mt-0.5">
+                {continueGame.subtitle}
               </p>
             </div>
 
             <Link
-              href={suggestedGame.href}
-              className="self-start sm:self-auto shrink-0 px-4 py-2.5 rounded-xl bg-shared-amber hover:bg-[#e6a847] text-surface-deep font-semibold text-xs tracking-tight transition-all active:scale-95 flex items-center gap-1.5"
+              href={continueGame.href}
+              className="self-start sm:self-auto px-5 py-2.5 rounded-xl bg-brand text-text-on-mint font-semibold text-xs transition-all hover:bg-brand-hover active:scale-95 flex items-center gap-1.5 shadow-sm focus-visible:outline-2 focus-visible:outline-brand cursor-pointer"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Play Now</span>
+              <span>{continueGame.actionLabel}</span>
             </Link>
           </div>
 
-          <div className="pt-2 border-t border-subtle-border flex items-center gap-3 text-[11px] font-mono text-on-surface-variant">
-            <div className="flex items-center gap-1">
-              <Clock className="w-3 h-3 text-shared-amber" />
-              <span>{suggestedGame.durationLabel}</span>
-            </div>
-            <span>·</span>
-            <div className="flex items-center gap-1.5">
-              {suggestedGame.tags.map((tag) => (
-                <span key={tag} className="px-2 py-0.5 rounded bg-surface-overlay text-[10px]">
-                  {tag}
-                </span>
-              ))}
-            </div>
+          {/* Progress Track */}
+          <div className="w-full bg-surface-charcoal rounded-full h-1.5 overflow-hidden border border-border/50">
+            <div
+              className="bg-brand h-full rounded-full transition-all duration-500"
+              style={{ width: `${continueGame.progressPercent}%` }}
+            />
           </div>
         </div>
+      )}
+
+      {/* 2. Tonight's Suggested Spotlight */}
+      <div className="p-5 sm:p-6 rounded-3xl bg-surface border border-border/80 shadow-elevation-sm flex flex-col gap-3.5">
+        <div className="flex items-center justify-between text-xs font-mono">
+          <span className="text-soft-stone font-medium">Tonight&apos;s Recommendation</span>
+          <span className="text-soft-sage">{suggestedGame.affinityBonus}</span>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <h4 className="font-display text-base sm:text-lg text-warm-cream">
+              {suggestedGame.title}
+            </h4>
+            <p className="text-xs text-soft-stone leading-relaxed line-clamp-2">
+              {suggestedGame.description}
+            </p>
+          </div>
+
+          <Link
+            href={suggestedGame.href}
+            className="self-start sm:self-auto shrink-0 px-5 py-2.5 rounded-xl bg-brand text-text-on-mint font-semibold text-xs tracking-tight transition-all hover:bg-brand-hover active:scale-95 flex items-center gap-1.5 shadow-sm focus-visible:outline-2 focus-visible:outline-brand cursor-pointer"
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span>Launch Game</span>
+          </Link>
+        </div>
+
+        <div className="pt-2 border-t border-border/60 flex items-center gap-2 text-xs font-mono text-soft-sage">
+          <Clock className="w-3.5 h-3.5 text-soft-stone" />
+          <span className="font-tabular text-warm-cream">{suggestedGame.durationLabel}</span>
+          <span aria-hidden="true">·</span>
+          <span>{suggestedGame.badgeLabel}</span>
+        </div>
+      </div>
+
+      {/* 3. The 6 Distinct Experiences Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+        {TOGETHERPLAY_SIX_EXPERIENCES.map((exp) => {
+          const Icon = exp.icon;
+          return (
+            <Link
+              key={exp.id}
+              href={exp.href}
+              className="p-4 rounded-2xl bg-surface hover:bg-surface-secondary border border-border/80 hover:border-border-strong transition-all flex flex-col justify-between gap-3 group focus-visible:outline-2 focus-visible:outline-brand"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-surface-charcoal border border-border flex items-center justify-center shrink-0 group-hover:border-warm-cream/30 transition-colors">
+                    <Icon className={`w-4 h-4 ${exp.accent}`} />
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-semibold text-warm-cream group-hover:text-warm-cream transition-colors">
+                      {exp.title}
+                    </h5>
+                    <span className="text-[10px] font-mono text-soft-sage">
+                      {exp.playStyle}
+                    </span>
+                  </div>
+                </div>
+
+                <span className="text-[10px] font-mono font-tabular text-soft-sage">
+                  {exp.duration}
+                </span>
+              </div>
+
+              <p className="text-xs text-soft-stone leading-relaxed line-clamp-2">
+                {exp.cue}
+              </p>
+
+              <div className="flex items-center justify-end text-xs font-mono text-soft-sage group-hover:text-warm-cream transition-colors pt-1.5 border-t border-border/40">
+                <span className="text-[11px]">Enter Game</span>
+                <ArrowRight className="w-3 h-3 ml-1 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </section>
   );

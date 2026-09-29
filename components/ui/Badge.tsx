@@ -2,13 +2,13 @@ import React from "react";
 import { cn } from "@/lib/utils";
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: "amber" | "ember" | "sage" | "neutral" | "subtle";
+  variant?: "brand" | "mint" | "amber" | "ember" | "sage" | "neutral" | "subtle";
   size?: "sm" | "md";
 }
 
 export const Badge: React.FC<BadgeProps> = ({
   className,
-  variant = "amber",
+  variant = "brand",
   size = "sm",
   children,
   ...props
@@ -19,11 +19,13 @@ export const Badge: React.FC<BadgeProps> = ({
   }[size];
 
   const variantStyles = {
-    amber: "bg-shared-amber/15 text-shared-amber border border-shared-amber/25",
-    ember: "bg-player-one-ember/15 text-player-one-ember border border-player-one-ember/25",
-    sage: "bg-player-two-sage/20 text-player-two-sage border border-player-two-sage/30",
-    neutral: "bg-surface-container-high text-on-surface-variant border border-subtle-border",
-    subtle: "bg-surface-overlay text-canvas-cream/80 border border-subtle-border",
+    brand: "bg-brand/15 text-brand border border-border-strong",
+    mint: "bg-brand/15 text-brand border border-border-strong",
+    amber: "bg-warning/15 text-warning border border-warning/25",
+    ember: "bg-danger/15 text-danger border border-danger/25",
+    sage: "bg-brand/15 text-brand border border-border",
+    neutral: "bg-surface-raised text-text-secondary border border-border",
+    subtle: "bg-surface text-text-primary border border-border",
   }[variant];
 
   return (

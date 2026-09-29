@@ -66,20 +66,20 @@ export const PartnerPresenceBadge: React.FC<PartnerPresenceBadgeProps> = ({
     return (
       <button
         onClick={handleNudge}
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-raised hover:bg-surface-overlay border border-subtle-border hover:border-border-sage/40 transition-all text-xs select-none cursor-pointer ${
-          isNudging ? "scale-95 border-shared-amber" : ""
+        className={`flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] rounded-full bg-surface hover:bg-surface-raised border border-border hover:border-brand/40 transition-all text-xs select-none cursor-pointer focus-visible:outline-2 focus-visible:outline-brand ${
+          isNudging ? "scale-95 border-brand bg-brand/10 shadow-mint-glow" : ""
         } ${className}`}
         title={`${partnerName} is ${getStateDescription()} in ${partnerCity} · Click to nudge`}
         aria-label={`${partnerName} presence: ${state}`}
       >
         <PresenceIndicator state={state} connectionStatus={connectionStatus} size="sm" />
-        <span className="text-[11px] font-medium text-on-surface">
+        <span className="text-xs font-medium text-text-primary">
           {partnerName}
         </span>
-        <span className="text-[10px] text-on-surface-variant font-mono hidden sm:inline">
+        <span className="text-[10px] text-text-muted font-mono hidden sm:inline">
           · {connectionStatus === "reconnecting" ? "Reconnecting" : state.toLowerCase()}
         </span>
-        <Heart className="w-3 h-3 text-player-one-ember/70 fill-player-one-ember/20 hover:fill-player-one-ember ml-0.5" />
+        <Heart className="w-3 h-3 text-brand fill-brand/20 hover:fill-brand ml-0.5 transition-colors" />
       </button>
     );
   }

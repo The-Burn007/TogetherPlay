@@ -3,7 +3,6 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
@@ -13,6 +12,7 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { auth } from "@/lib/firebase/client";
 import { coupleService, type CreateInviteResult } from "@/lib/firebase/services/couple";
 import type { Couple, CoupleInvite } from "@/types/domain";
+import { motion } from "motion/react";
 import {
   Heart,
   Copy,
@@ -25,7 +25,6 @@ import {
   CheckCircle2,
   ShieldCheck,
   UserCheck,
-  Clock,
 } from "lucide-react";
 
 function InviteContent() {
@@ -76,7 +75,6 @@ function InviteContent() {
     const setupInviterState = async () => {
       setIsGeneratingInvite(true);
       try {
-        // Resolve active couple: either from query or user profile
         let activeCouple: Couple | null = null;
         if (queryCoupleId) {
           activeCouple = await coupleService.getCouple(queryCoupleId);
@@ -86,7 +84,6 @@ function InviteContent() {
         }
 
         if (!activeCouple) {
-          // If no couple exists yet, direct to create step
           router.push("/onboarding/create-couple");
           return;
         }
@@ -94,13 +91,11 @@ function InviteContent() {
         if (!isMounted) return;
         setCouple(activeCouple);
 
-        // If couple already has 2 members, connection is complete
         if (activeCouple.memberIds.length >= 2) {
           setIsPartnerJoined(true);
           return;
         }
 
-        // Generate high-entropy invite with SHA-256 hash in database
         const inv = await coupleService.createInvitation(
           activeCouple.coupleId,
           user.uid,
@@ -110,7 +105,6 @@ function InviteContent() {
         if (!isMounted) return;
         setInviteData(inv);
 
-        // Real-time listener: detects instant partner connection
         unsubscribeCouple = coupleService.subscribeToCouple(
           activeCouple.coupleId,
           (updatedCouple) => {
@@ -169,7 +163,6 @@ function InviteContent() {
     };
   }, [mode, queryInviteId]);
 
-  // Copy code handler
   const handleCopyCode = async () => {
     if (!inviteData?.pairingCode) return;
     try {
@@ -182,7 +175,6 @@ function InviteContent() {
     }
   };
 
-  // Copy full invite link handler
   const handleCopyLink = async () => {
     if (!inviteData?.inviteUrl) return;
     try {
@@ -195,7 +187,6 @@ function InviteContent() {
     }
   };
 
-  // Native Web Share API handler
   const handleShare = async () => {
     if (!inviteData) return;
     if (navigator.share) {
@@ -205,7 +196,7 @@ function InviteContent() {
           text: `Join me in our private couple space on TogetherPlay. Pairing Code: ${inviteData.pairingCode}`,
           url: inviteData.inviteUrl,
         });
-      } catch (err) {
+      } catch {
         // User cancelled share
       }
     } else {
@@ -213,7 +204,6 @@ function InviteContent() {
     }
   };
 
-  // Accept invite handler (using server API route or client service)
   const handleAcceptInvite = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
@@ -244,7 +234,6 @@ function InviteContent() {
         headers["Authorization"] = `Bearer ${token}`;
       }
 
-      // Server-side verification & atomic transaction membership change
       const res = await fetch("/api/couples/accept-invite", {
         method: "POST",
         headers,
@@ -265,7 +254,6 @@ function InviteContent() {
         variant: "success",
       });
 
-      // Redirect into sanctuary home
       setTimeout(() => {
         router.push("/home");
       }, 1500);
@@ -281,23 +269,28 @@ function InviteContent() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6 max-w-lg mx-auto py-6 sm:py-10"
+    >
       {/* Mode Switch Tabs (Inviter vs Enter Code) */}
-      <div className="flex items-center justify-between border-b border-subtle-border pb-3">
+      <div className="flex items-center justify-between border-b border-border pb-3">
         <Link
           href="/onboarding"
-          className="text-xs text-on-surface-variant hover:text-on-surface font-mono transition-colors"
+          className="text-xs text-text-muted hover:text-text-primary font-mono transition-colors"
         >
           ← Sanctuary
         </Link>
 
-        <div className="flex items-center gap-1 bg-surface-raised border border-subtle-border rounded-full p-1 text-[11px] font-mono">
+        <div className="flex items-center gap-1 bg-surface border border-border rounded-full p-1 text-[11px] font-mono">
           <button
             onClick={() => setMode("inviter")}
             className={`px-3 py-1 rounded-full transition-all cursor-pointer ${
               mode === "inviter"
-                ? "bg-surface-overlay text-shared-amber font-semibold shadow-xs"
-                : "text-on-surface-variant hover:text-on-surface"
+                ? "bg-brand text-text-on-mint font-semibold shadow-sm"
+                : "text-text-muted hover:text-text-primary"
             }`}
           >
             Invite Partner
@@ -306,8 +299,8 @@ function InviteContent() {
             onClick={() => setMode("acceptor")}
             className={`px-3 py-1 rounded-full transition-all cursor-pointer ${
               mode === "acceptor"
-                ? "bg-surface-overlay text-player-two-sage font-semibold shadow-xs"
-                : "text-on-surface-variant hover:text-on-surface"
+                ? "bg-brand text-text-on-mint font-semibold shadow-sm"
+                : "text-text-muted hover:text-text-primary"
             }`}
           >
             Enter Code
@@ -322,14 +315,14 @@ function InviteContent() {
         <div className="space-y-6">
           {/* Header */}
           <div className="space-y-2 text-center">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-raised border border-subtle-border text-[11px] font-mono text-shared-amber">
-              <Sparkles className="w-3 h-3" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface border border-border text-[11px] font-mono text-brand">
+              <Sparkles className="w-3.5 h-3.5" />
               <span>Step 3 of 3 · Partner Pairing</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-serif font-bold text-on-surface tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-display font-medium text-text-primary tracking-tight">
               Invite Your Person
             </h1>
-            <p className="text-xs sm:text-sm text-on-surface-variant max-w-sm mx-auto leading-relaxed">
+            <p className="text-xs sm:text-sm text-text-secondary max-w-sm mx-auto leading-relaxed">
               Send this private pairing link or code to your partner. Once they step
               in, your shared world awakens.
             </p>
@@ -337,20 +330,20 @@ function InviteContent() {
 
           {/* Invitation Card */}
           {isGeneratingInvite ? (
-            <Card variant="raised" className="p-8 flex flex-col items-center justify-center space-y-3">
+            <div className="bg-surface border border-border rounded-2xl p-8 flex flex-col items-center justify-center space-y-3 shadow-elevation-md">
               <LoadingSpinner size="md" label="Preparing your private pairing key..." />
-            </Card>
+            </div>
           ) : (
-            <Card variant="raised" className="p-6 space-y-6">
+            <div className="bg-surface border border-border rounded-2xl p-6 sm:p-7 space-y-6 shadow-elevation-md">
               {/* Pairing Code Spotlight */}
-              <div className="text-center space-y-2 p-4 rounded-xl bg-surface-deep/80 border border-shared-amber/30 relative overflow-hidden">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-on-surface-variant">
+              <div className="text-center space-y-2 p-5 rounded-2xl bg-background-canvas border border-border-strong relative overflow-hidden">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-text-muted">
                   Private Pairing Code
                 </span>
-                <div className="text-2xl sm:text-3xl font-mono font-bold text-shared-amber tracking-wider select-all">
+                <div className="text-2xl sm:text-3xl font-mono font-bold text-brand tracking-widest select-all">
                   {inviteData?.pairingCode || "SANCT-PAIR-CODE"}
                 </div>
-                <p className="text-[10px] text-on-surface-variant/80 font-mono">
+                <p className="text-[10px] text-text-muted font-mono">
                   SHA-256 cryptographic seal · Single-use for your partner only
                 </p>
               </div>
@@ -358,13 +351,13 @@ function InviteContent() {
               {/* Action Buttons: Copy Code, Copy Link, Native Share */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <Button
-                  variant="amber"
+                  variant="brand"
                   size="md"
                   onClick={handleCopyLink}
                   className="w-full justify-center"
                 >
                   {copiedLink ? (
-                    <Check className="w-4 h-4 mr-1.5 text-player-two-sage" />
+                    <Check className="w-4 h-4 mr-1.5 text-text-on-mint" />
                   ) : (
                     <Copy className="w-4 h-4 mr-1.5" />
                   )}
@@ -377,33 +370,33 @@ function InviteContent() {
                   onClick={handleShare}
                   className="w-full justify-center"
                 >
-                  <Share2 className="w-4 h-4 mr-1.5" />
+                  <Share2 className="w-4 h-4 mr-1.5 text-brand" />
                   <span>Send via Message</span>
                 </Button>
               </div>
 
               {/* LIVE PARTNER CONNECTION & WAITING STATE */}
-              <div className="pt-2 border-t border-subtle-border space-y-4">
+              <div className="pt-2 border-t border-border space-y-4">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-mono text-on-surface-variant uppercase text-[10px] tracking-wider">
+                  <span className="font-mono text-text-muted uppercase text-[10px] tracking-wider">
                     Sanctuary Connection State
                   </span>
-                  <Badge variant={isPartnerJoined ? "sage" : "amber"}>
+                  <Badge variant={isPartnerJoined ? "brand" : "neutral"}>
                     {isPartnerJoined ? "Connected" : "Waiting for Partner"}
                   </Badge>
                 </div>
 
                 {/* Visual Interlock Ripple Indicator */}
-                <div className="p-4 rounded-xl bg-surface-base border border-subtle-border flex flex-col items-center justify-center space-y-3">
-                  <div className="relative flex items-center justify-center">
+                <div className="p-5 rounded-2xl bg-background-canvas border border-border-subtle flex flex-col items-center justify-center space-y-3">
+                  <div className="relative flex items-center justify-center py-2">
                     {/* Pulsing Aura if waiting */}
                     {!isPartnerJoined && (
-                      <span className="absolute w-14 h-14 rounded-full bg-shared-amber/20 animate-ping" />
+                      <span className="absolute w-16 h-16 rounded-full bg-brand/20 animate-ping" />
                     )}
 
                     <div className="relative flex items-center -space-x-2">
                       {/* Inviter Node */}
-                      <div className="w-10 h-10 rounded-full bg-surface-raised border-2 border-player-one-ember flex items-center justify-center text-player-one-ember shadow-md">
+                      <div className="w-11 h-11 rounded-full bg-surface border-2 border-player-one-ember flex items-center justify-center text-player-one-ember shadow-md">
                         <span className="text-xs font-bold font-mono">
                           {user?.displayName?.slice(0, 1) || "You"}
                         </span>
@@ -411,23 +404,23 @@ function InviteContent() {
 
                       {/* Cord Connector */}
                       <div
-                        className={`w-8 h-1 transition-all ${
-                          isPartnerJoined ? "bg-shared-amber" : "bg-subtle-border"
+                        className={`w-10 h-1 transition-all ${
+                          isPartnerJoined ? "bg-brand" : "bg-border-strong"
                         }`}
                       />
 
                       {/* Partner Node */}
                       <div
-                        className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all ${
+                        className={`w-11 h-11 rounded-full border-2 flex items-center justify-center transition-all ${
                           isPartnerJoined
-                            ? "bg-surface-raised border-player-two-sage text-player-two-sage shadow-md"
-                            : "bg-surface-deep border-dashed border-on-surface-variant/40 text-on-surface-variant/40"
+                            ? "bg-surface border-player-two-sage text-player-two-sage shadow-md"
+                            : "bg-surface-raised border-dashed border-border text-text-muted"
                         }`}
                       >
                         {isPartnerJoined ? (
                           <CheckCircle2 className="w-5 h-5 text-player-two-sage" />
                         ) : (
-                          <Radio className="w-4 h-4 animate-pulse text-shared-amber" />
+                          <Radio className="w-4 h-4 animate-pulse text-brand" />
                         )}
                       </div>
                     </div>
@@ -435,12 +428,12 @@ function InviteContent() {
 
                   {/* Status Label */}
                   <div className="text-center space-y-1">
-                    <p className="text-xs font-medium text-on-surface">
+                    <p className="text-xs font-medium text-text-primary">
                       {isPartnerJoined
                         ? "Partner connected! Your sanctuary is now complete."
                         : "Listening for your partner's connection..."}
                     </p>
-                    <p className="text-[11px] text-on-surface-variant font-mono">
+                    <p className="text-[11px] text-text-muted font-mono">
                       {isPartnerJoined
                         ? "All relationship rooms, memories, and duels unlocked."
                         : "Keep this tab open or share the link. We'll alert you instantly."}
@@ -450,7 +443,7 @@ function InviteContent() {
                   {/* Enter Sanctuary Button when Connected */}
                   {isPartnerJoined && (
                     <Button
-                      variant="sage"
+                      variant="brand"
                       size="lg"
                       onClick={() => router.push("/home")}
                       className="w-full mt-2 font-semibold"
@@ -461,7 +454,7 @@ function InviteContent() {
                   )}
                 </div>
               </div>
-            </Card>
+            </div>
           )}
         </div>
       )}
@@ -473,14 +466,14 @@ function InviteContent() {
         <div className="space-y-6">
           {/* Header */}
           <div className="space-y-2 text-center">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-raised border border-subtle-border text-[11px] font-mono text-player-two-sage">
-              <KeyRound className="w-3 h-3" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface border border-border text-[11px] font-mono text-brand">
+              <KeyRound className="w-3.5 h-3.5" />
               <span>Sanctuary Admission</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-serif font-bold text-on-surface tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-display font-medium text-text-primary tracking-tight">
               Step Into Your Space
             </h1>
-            <p className="text-xs sm:text-sm text-on-surface-variant max-w-sm mx-auto leading-relaxed">
+            <p className="text-xs sm:text-sm text-text-secondary max-w-sm mx-auto leading-relaxed">
               Your partner has initiated your private TogetherPlay room. Confirm your
               pairing code to link your accounts.
             </p>
@@ -488,40 +481,37 @@ function InviteContent() {
 
           {/* Invitation Preview Card */}
           {invitePreview && (
-            <Card
-              variant="raised"
-              className="p-5 border-player-two-sage/40 bg-gradient-to-b from-surface-raised to-player-two-sage/5 space-y-3"
-            >
+            <div className="p-5 rounded-2xl bg-surface border border-border space-y-3 shadow-elevation-sm">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-player-two-sage/20 border border-player-two-sage flex items-center justify-center text-player-two-sage">
+                <div className="w-10 h-10 rounded-xl bg-surface-raised border border-border flex items-center justify-center text-brand">
                   <Heart className="w-5 h-5 fill-current" />
                 </div>
                 <div>
-                  <span className="text-xs font-mono text-on-surface-variant uppercase tracking-wider">
+                  <span className="text-xs font-mono text-text-muted uppercase tracking-wider">
                     Invited By
                   </span>
-                  <h3 className="text-sm font-semibold text-on-surface">
+                  <h3 className="text-sm font-semibold text-text-primary">
                     {invitePreview.inviterName || "Your Partner"}
                   </h3>
                 </div>
               </div>
-              <p className="text-xs text-on-surface-variant leading-relaxed">
+              <p className="text-xs text-text-secondary leading-relaxed">
                 This room is exclusively designated for the two of you. No other users
                 can view your live presence or memories.
               </p>
-            </Card>
+            </div>
           )}
 
           {/* Accept Form Card */}
-          <Card variant="raised" className="p-6">
+          <div className="bg-surface border border-border rounded-2xl p-6 sm:p-7 shadow-elevation-md">
             <form onSubmit={handleAcceptInvite} className="space-y-4">
               {/* Pairing Code Input */}
               <div className="space-y-1.5">
                 <label
                   htmlFor="pairingCode"
-                  className="block text-xs font-semibold text-on-surface tracking-wide uppercase font-mono"
+                  className="block text-xs font-semibold text-text-primary tracking-wider uppercase font-mono"
                 >
-                  8-Character Pairing Code
+                  Pairing Code
                 </label>
                 <Input
                   id="pairingCode"
@@ -539,7 +529,7 @@ function InviteContent() {
                 <div className="space-y-1.5">
                   <label
                     htmlFor="inviteId"
-                    className="block text-xs font-semibold text-on-surface tracking-wide uppercase font-mono"
+                    className="block text-xs font-semibold text-text-primary tracking-wider uppercase font-mono"
                   >
                     Invitation ID
                   </label>
@@ -552,19 +542,19 @@ function InviteContent() {
                     disabled={isAccepting || acceptedSuccess}
                     required
                   />
-                  <p className="text-[10px] text-on-surface-variant font-mono">
+                  <p className="text-[10px] text-text-muted font-mono">
                     Found at the end of the invite URL or provided by your partner.
                   </p>
                 </div>
               )}
 
               {/* Security Invariant Notice */}
-              <div className="p-3 rounded-lg bg-surface-deep/70 border border-subtle-border space-y-1 text-left">
-                <div className="flex items-center gap-1 text-[11px] font-semibold text-on-surface">
-                  <ShieldCheck className="w-3.5 h-3.5 text-player-two-sage" />
+              <div className="p-3.5 rounded-xl bg-background-canvas border border-border-subtle space-y-1 text-left">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
+                  <ShieldCheck className="w-4 h-4 text-brand" />
                   <span>Verified Partner Membership</span>
                 </div>
-                <p className="text-[10px] text-on-surface-variant font-mono leading-relaxed">
+                <p className="text-[10px] text-text-muted font-mono leading-relaxed">
                   Accepting permanently links your profile as Player Two. The couple
                   space will be locked from any further members.
                 </p>
@@ -573,7 +563,7 @@ function InviteContent() {
               {/* Submit CTA */}
               <Button
                 type="submit"
-                variant="sage"
+                variant="brand"
                 size="lg"
                 isLoading={isAccepting}
                 disabled={acceptedSuccess}
@@ -592,10 +582,10 @@ function InviteContent() {
                 )}
               </Button>
             </form>
-          </Card>
+          </div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
 

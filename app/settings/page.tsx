@@ -2,32 +2,25 @@
 
 import React, { useState } from "react";
 import { Container } from "@/components/layout/Container";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { motion } from "motion/react";
 import {
-  Sliders,
   Bell,
-  Volume2,
   Lock,
-  Globe,
   Camera,
-  Mic,
-  Shield,
   Radio,
   CheckCircle2,
-  Sparkles,
-  Smartphone,
-  Eye,
   KeyRound,
   LogOut,
   User,
   Gamepad2,
   Zap,
+  Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { useNotifications } from "@/lib/presence/useNotifications";
@@ -83,40 +76,44 @@ export default function SettingsPage() {
   };
 
   return (
-    <Container size="sm" className="space-y-6">
+    <Container size="sm" className="space-y-6 pb-20">
       {/* 1. Header & Dev State Switcher */}
-      <header className="flex flex-col space-y-2">
-        <div className="flex items-center justify-between text-[10px] font-mono">
-          <span className="uppercase tracking-widest text-shared-amber font-semibold">
-            Couple Settings
-          </span>
-          <div className="flex items-center gap-1 bg-surface-raised border border-subtle-border rounded-full p-0.5">
+      <header className="flex flex-col space-y-2 pt-1">
+        <div className="flex items-center justify-between text-[11px] font-mono">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-brand" />
+            <span className="uppercase tracking-widest text-text-muted font-semibold">
+              Couple Controls
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1 bg-surface-raised border border-border rounded-full p-0.5">
             <button
               onClick={() => setViewState("normal")}
-              className={`px-2 py-0.5 rounded-full transition-all ${
+              className={`px-2.5 py-0.5 rounded-full transition-all cursor-pointer ${
                 viewState === "normal"
-                  ? "bg-surface-overlay text-shared-amber font-semibold"
-                  : "text-on-surface-variant hover:text-on-surface"
+                  ? "bg-brand text-text-on-mint font-semibold"
+                  : "text-text-muted hover:text-text-primary"
               }`}
             >
               Active
             </button>
             <button
               onClick={() => setViewState("loading")}
-              className={`px-2 py-0.5 rounded-full transition-all ${
+              className={`px-2.5 py-0.5 rounded-full transition-all cursor-pointer ${
                 viewState === "loading"
-                  ? "bg-surface-overlay text-shared-amber font-semibold"
-                  : "text-on-surface-variant hover:text-on-surface"
+                  ? "bg-brand text-text-on-mint font-semibold"
+                  : "text-text-muted hover:text-text-primary"
               }`}
             >
               Loading
             </button>
             <button
               onClick={() => setViewState("empty")}
-              className={`px-2 py-0.5 rounded-full transition-all ${
+              className={`px-2.5 py-0.5 rounded-full transition-all cursor-pointer ${
                 viewState === "empty"
-                  ? "bg-surface-overlay text-shared-amber font-semibold"
-                  : "text-on-surface-variant hover:text-on-surface"
+                  ? "bg-brand text-text-on-mint font-semibold"
+                  : "text-text-muted hover:text-text-primary"
               }`}
             >
               Empty
@@ -124,17 +121,22 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <h1 className="text-2xl font-semibold text-on-surface tracking-tight">
-          Sanctuary Settings
-        </h1>
-        <p className="text-xs text-on-surface-variant leading-relaxed">
-          Configure real-time presence relay, haptic chimes, WebRTC streams, and shared space privacy.
-        </p>
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-display font-medium text-text-primary tracking-tight">
+            Settings &amp; Sanctuary
+          </h1>
+          <p className="text-xs text-text-secondary leading-relaxed">
+            Configure real-time presence relay, haptic chimes, WebRTC streams, and shared space privacy.
+          </p>
+        </div>
       </header>
 
       {viewState === "loading" && (
         <div className="py-12 flex flex-col items-center justify-center space-y-3">
           <LoadingSpinner size="lg" label="Decrypting sanctuary configurations..." />
+          <p className="text-[11px] font-mono text-text-muted">
+            Reading encrypted preference store
+          </p>
         </div>
       )}
 
@@ -148,136 +150,145 @@ export default function SettingsPage() {
       )}
 
       {viewState === "normal" && (
-        <div className="space-y-4">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+          className="space-y-4"
+        >
           {/* 1. Partner Presence & Real-time Resonance */}
-          <Card variant="raised" className="p-5 space-y-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-on-surface border-b border-subtle-border pb-3">
-              <Radio className="w-4 h-4 text-player-two-sage" />
+          <div className="bg-surface border border-border rounded-2xl p-5 space-y-4 shadow-elevation-sm">
+            <div className="flex items-center gap-2 text-sm font-semibold text-text-primary border-b border-border pb-3">
+              <Radio className="w-4 h-4 text-brand" />
               <span>Resonance &amp; Telemetry</span>
             </div>
 
             <div className="flex items-center justify-between">
               <div className="space-y-0.5 max-w-[80%]">
-                <span className="text-xs font-medium text-on-surface">
+                <span className="text-xs font-medium text-text-primary block">
                   Tactile Haptic Pulses
                 </span>
-                <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                <p className="text-[11px] text-text-secondary leading-relaxed">
                   Vibrate mobile device when Sam touches the resonance beacon or sends a nudge.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setHaptics(!haptics)}
-                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
-                  haptics ? "bg-shared-amber" : "bg-surface-overlay"
+                className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer focus-visible:outline-2 focus-visible:outline-brand ${
+                  haptics ? "bg-brand" : "bg-surface-raised border border-border"
                 }`}
                 aria-pressed={haptics}
+                aria-label="Toggle Tactile Haptic Pulses"
               >
                 <span
-                  className={`block w-4 h-4 rounded-full bg-surface-deep transition-transform absolute top-1 ${
-                    haptics ? "left-6" : "left-1"
+                  className={`block w-4 h-4 rounded-full transition-transform absolute top-1 ${
+                    haptics ? "left-7 bg-text-on-mint shadow-sm" : "left-1 bg-text-muted"
                   }`}
                 />
               </button>
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-subtle-border/60">
+            <div className="flex items-center justify-between pt-3 border-t border-border-subtle">
               <div className="space-y-0.5 max-w-[80%]">
-                <span className="text-xs font-medium text-on-surface">
+                <span className="text-xs font-medium text-text-primary block">
                   Morning Wake Chimes
                 </span>
-                <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                <p className="text-[11px] text-text-secondary leading-relaxed">
                   Play subtle ambient chord when Sam comes online in Tokyo.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setWakeChimes(!wakeChimes)}
-                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
-                  wakeChimes ? "bg-shared-amber" : "bg-surface-overlay"
+                className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer focus-visible:outline-2 focus-visible:outline-brand ${
+                  wakeChimes ? "bg-brand" : "bg-surface-raised border border-border"
                 }`}
                 aria-pressed={wakeChimes}
+                aria-label="Toggle Morning Wake Chimes"
               >
                 <span
-                  className={`block w-4 h-4 rounded-full bg-surface-deep transition-transform absolute top-1 ${
-                    wakeChimes ? "left-6" : "left-1"
+                  className={`block w-4 h-4 rounded-full transition-transform absolute top-1 ${
+                    wakeChimes ? "left-7 bg-text-on-mint shadow-sm" : "left-1 bg-text-muted"
                   }`}
                 />
               </button>
             </div>
-          </Card>
+          </div>
 
           {/* 2. Media, Stream & WebRTC Relay */}
-          <Card variant="raised" className="p-5 space-y-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-on-surface border-b border-subtle-border pb-3">
+          <div className="bg-surface border border-border rounded-2xl p-5 space-y-4 shadow-elevation-sm">
+            <div className="flex items-center gap-2 text-sm font-semibold text-text-primary border-b border-border pb-3">
               <Camera className="w-4 h-4 text-player-one-ember" />
               <span>Camera &amp; Audio Relay</span>
             </div>
 
             <div className="flex items-center justify-between">
               <div className="space-y-0.5 max-w-[80%]">
-                <span className="text-xs font-medium text-on-surface">
+                <span className="text-xs font-medium text-text-primary block">
                   Dual Camera Scavenger Sync
                 </span>
-                <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                <p className="text-[11px] text-text-secondary leading-relaxed">
                   Hardware-accelerated peer-to-peer WebRTC video feed for games like Find It First.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setDualCameraSync(!dualCameraSync)}
-                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
-                  dualCameraSync ? "bg-shared-amber" : "bg-surface-overlay"
+                className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer focus-visible:outline-2 focus-visible:outline-brand ${
+                  dualCameraSync ? "bg-brand" : "bg-surface-raised border border-border"
                 }`}
                 aria-pressed={dualCameraSync}
+                aria-label="Toggle Dual Camera Scavenger Sync"
               >
                 <span
-                  className={`block w-4 h-4 rounded-full bg-surface-deep transition-transform absolute top-1 ${
-                    dualCameraSync ? "left-6" : "left-1"
+                  className={`block w-4 h-4 rounded-full transition-transform absolute top-1 ${
+                    dualCameraSync ? "left-7 bg-text-on-mint shadow-sm" : "left-1 bg-text-muted"
                   }`}
                 />
               </button>
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-subtle-border/60">
+            <div className="flex items-center justify-between pt-3 border-t border-border-subtle">
               <div className="space-y-0.5 max-w-[80%]">
-                <span className="text-xs font-medium text-on-surface">
+                <span className="text-xs font-medium text-text-primary block">
                   Low-Latency Spatial Audio
                 </span>
-                <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                <p className="text-[11px] text-text-secondary leading-relaxed">
                   Opus 48kHz audio codec with echo suppression for simultaneous whisper notes.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setLowLatencyAudio(!lowLatencyAudio)}
-                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
-                  lowLatencyAudio ? "bg-shared-amber" : "bg-surface-overlay"
+                className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer focus-visible:outline-2 focus-visible:outline-brand ${
+                  lowLatencyAudio ? "bg-brand" : "bg-surface-raised border border-border"
                 }`}
                 aria-pressed={lowLatencyAudio}
+                aria-label="Toggle Low-Latency Spatial Audio"
               >
                 <span
-                  className={`block w-4 h-4 rounded-full bg-surface-deep transition-transform absolute top-1 ${
-                    lowLatencyAudio ? "left-6" : "left-1"
+                  className={`block w-4 h-4 rounded-full transition-transform absolute top-1 ${
+                    lowLatencyAudio ? "left-7 bg-text-on-mint shadow-sm" : "left-1 bg-text-muted"
                   }`}
                 />
               </button>
             </div>
-          </Card>
+          </div>
 
           {/* 3. Notification Settings (Game Activity, Challenges, Daily Moments) */}
-          <Card variant="raised" className="p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-subtle-border pb-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
-                <Bell className="w-4 h-4 text-shared-amber" />
+          <div className="bg-surface border border-border rounded-2xl p-5 space-y-4 shadow-elevation-sm">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
+                <Bell className="w-4 h-4 text-brand" />
                 <span>Partner Notification Channels</span>
               </div>
-              <Badge variant="sage" size="sm">
+              <Badge variant="brand" size="sm">
                 Real-time Sync
               </Badge>
             </div>
 
-            <p className="text-xs text-on-surface-variant leading-relaxed">
+            <p className="text-xs text-text-secondary leading-relaxed">
               Tailor the gentle alerts you receive when your partner interacts with your sanctuary across distances.
             </p>
 
@@ -285,12 +296,12 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between pt-1">
               <div className="space-y-0.5 max-w-[80%]">
                 <div className="flex items-center gap-1.5">
-                  <Gamepad2 className="w-3.5 h-3.5 text-shared-amber" />
-                  <span className="text-xs font-medium text-on-surface">
+                  <Gamepad2 className="w-3.5 h-3.5 text-brand" />
+                  <span className="text-xs font-medium text-text-primary">
                     Game Activity
                   </span>
                 </div>
-                <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                <p className="text-[11px] text-text-secondary leading-relaxed">
                   Alerts when partner invites you to a match, starts a new game, or requests a rematch.
                 </p>
               </div>
@@ -304,29 +315,30 @@ export default function SettingsPage() {
                     variant: "info",
                   });
                 }}
-                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
-                  notifSettings.gameActivity ? "bg-shared-amber" : "bg-surface-overlay"
+                className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer focus-visible:outline-2 focus-visible:outline-brand ${
+                  notifSettings.gameActivity ? "bg-brand" : "bg-surface-raised border border-border"
                 }`}
                 aria-pressed={notifSettings.gameActivity}
+                aria-label="Toggle Game Activity Notifications"
               >
                 <span
-                  className={`block w-4 h-4 rounded-full bg-surface-deep transition-transform absolute top-1 ${
-                    notifSettings.gameActivity ? "left-6" : "left-1"
+                  className={`block w-4 h-4 rounded-full transition-transform absolute top-1 ${
+                    notifSettings.gameActivity ? "left-7 bg-text-on-mint shadow-sm" : "left-1 bg-text-muted"
                   }`}
                 />
               </button>
             </div>
 
             {/* B. Challenges */}
-            <div className="flex items-center justify-between pt-2 border-t border-subtle-border/60">
+            <div className="flex items-center justify-between pt-3 border-t border-border-subtle">
               <div className="space-y-0.5 max-w-[80%]">
                 <div className="flex items-center gap-1.5">
                   <Zap className="w-3.5 h-3.5 text-player-one-ember" />
-                  <span className="text-xs font-medium text-on-surface">
+                  <span className="text-xs font-medium text-text-primary">
                     Challenges
                   </span>
                 </div>
-                <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                <p className="text-[11px] text-text-secondary leading-relaxed">
                   Real-time toasts and drawer alerts when partner sends playful synchronous challenges.
                 </p>
               </div>
@@ -340,29 +352,30 @@ export default function SettingsPage() {
                     variant: "info",
                   });
                 }}
-                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
-                  notifSettings.challenges ? "bg-shared-amber" : "bg-surface-overlay"
+                className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer focus-visible:outline-2 focus-visible:outline-brand ${
+                  notifSettings.challenges ? "bg-brand" : "bg-surface-raised border border-border"
                 }`}
                 aria-pressed={notifSettings.challenges}
+                aria-label="Toggle Challenge Notifications"
               >
                 <span
-                  className={`block w-4 h-4 rounded-full bg-surface-deep transition-transform absolute top-1 ${
-                    notifSettings.challenges ? "left-6" : "left-1"
+                  className={`block w-4 h-4 rounded-full transition-transform absolute top-1 ${
+                    notifSettings.challenges ? "left-7 bg-text-on-mint shadow-sm" : "left-1 bg-text-muted"
                   }`}
                 />
               </button>
             </div>
 
             {/* C. Daily Moments */}
-            <div className="flex items-center justify-between pt-2 border-t border-subtle-border/60">
+            <div className="flex items-center justify-between pt-3 border-t border-border-subtle">
               <div className="space-y-0.5 max-w-[80%]">
                 <div className="flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-player-two-sage" />
-                  <span className="text-xs font-medium text-on-surface">
+                  <span className="text-xs font-medium text-text-primary">
                     Daily Moments
                   </span>
                 </div>
-                <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                <p className="text-[11px] text-text-secondary leading-relaxed">
                   Shared daily spark prompts, newly archived memory milestones, and partner notes.
                 </p>
               </div>
@@ -376,29 +389,30 @@ export default function SettingsPage() {
                     variant: "info",
                   });
                 }}
-                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
-                  notifSettings.dailyMoments ? "bg-shared-amber" : "bg-surface-overlay"
+                className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer focus-visible:outline-2 focus-visible:outline-brand ${
+                  notifSettings.dailyMoments ? "bg-brand" : "bg-surface-raised border border-border"
                 }`}
                 aria-pressed={notifSettings.dailyMoments}
+                aria-label="Toggle Daily Moments Notifications"
               >
                 <span
-                  className={`block w-4 h-4 rounded-full bg-surface-deep transition-transform absolute top-1 ${
-                    notifSettings.dailyMoments ? "left-6" : "left-1"
+                  className={`block w-4 h-4 rounded-full transition-transform absolute top-1 ${
+                    notifSettings.dailyMoments ? "left-7 bg-text-on-mint shadow-sm" : "left-1 bg-text-muted"
                   }`}
                 />
               </button>
             </div>
-          </Card>
+          </div>
 
           {/* 4. Sanctuary Encryption & Passkey */}
-          <Card variant="raised" className="p-5 space-y-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-on-surface border-b border-subtle-border pb-3">
-              <Lock className="w-4 h-4 text-shared-amber" />
+          <div className="bg-surface border border-border rounded-2xl p-5 space-y-4 shadow-elevation-sm">
+            <div className="flex items-center gap-2 text-sm font-semibold text-text-primary border-b border-border pb-3">
+              <Lock className="w-4 h-4 text-brand" />
               <span>Private Room Security</span>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-medium text-on-surface">
+              <label className="text-xs font-medium text-text-primary">
                 Shared Room Passkey
               </label>
               <div className="flex items-center gap-2">
@@ -407,36 +421,36 @@ export default function SettingsPage() {
                   onChange={(e) => setRoomKey(e.target.value)}
                   className="font-mono text-xs"
                 />
-                <Button variant="ghost" size="sm" onClick={handleRegenerateKey}>
-                  <KeyRound className="w-3.5 h-3.5 mr-1" />
+                <Button variant="surface" size="sm" onClick={handleRegenerateKey} className="shrink-0">
+                  <KeyRound className="w-3.5 h-3.5 mr-1 text-brand" />
                   Regen
                 </Button>
               </div>
-              <p className="text-[10px] text-on-surface-variant leading-relaxed font-mono">
+              <p className="text-[10px] text-text-muted leading-relaxed font-mono">
                 Only devices with this private key can pair and decrypt the live couple feed.
               </p>
             </div>
-          </Card>
+          </div>
 
-          {/* 4. Authenticated Account & Session */}
-          <Card variant="raised" className="p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-subtle-border pb-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
-                <User className="w-4 h-4 text-shared-amber" />
+          {/* 5. Authenticated Account & Session */}
+          <div className="bg-surface border border-border rounded-2xl p-5 space-y-4 shadow-elevation-sm">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
+                <User className="w-4 h-4 text-brand" />
                 <span>Account &amp; Sanctuary Session</span>
               </div>
-              <Badge variant="ember">Authenticated</Badge>
+              <Badge variant="brand">Authenticated</Badge>
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1">
-                <span className="text-xs font-semibold text-on-surface">
+                <span className="text-xs font-semibold text-text-primary block">
                   {user?.displayName || "Player One"}
                 </span>
-                <p className="text-[11px] text-on-surface-variant font-mono">
+                <p className="text-[11px] text-text-secondary font-mono">
                   {user?.email || "Signed in with private credentials"}
                 </p>
-                <p className="text-[10px] text-on-surface-variant/80 font-mono">
+                <p className="text-[10px] text-text-muted font-mono font-tabular">
                   UID: {user?.uid ? `${user.uid.slice(0, 12)}...` : "—"}
                 </p>
               </div>
@@ -452,16 +466,16 @@ export default function SettingsPage() {
                 <span>Sign Out</span>
               </Button>
             </div>
-          </Card>
+          </div>
 
           {/* Save Button */}
           <div className="pt-2 flex justify-end">
-            <Button variant="amber" onClick={handleSave} className="w-full sm:w-auto">
+            <Button variant="brand" size="md" onClick={handleSave} className="w-full sm:w-auto font-semibold">
               <CheckCircle2 className="w-4 h-4 mr-1.5" />
               Save Preferences
             </Button>
           </div>
-        </div>
+        </motion.div>
       )}
     </Container>
   );

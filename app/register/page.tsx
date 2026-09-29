@@ -4,11 +4,11 @@ import React, { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { motion } from "motion/react";
 import {
   Lock,
   Mail,
@@ -18,7 +18,6 @@ import {
   Globe,
   ArrowRight,
   AlertCircle,
-  Sparkles,
 } from "lucide-react";
 
 function RegisterForm() {
@@ -137,43 +136,53 @@ function RegisterForm() {
   }
 
   return (
-    <div className="w-full max-w-md mx-auto py-8 px-4 sm:px-6">
-      <div className="text-center mb-6 space-y-2">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-surface-raised border border-subtle-border shadow-md mb-2">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="w-full max-w-md mx-auto py-8 sm:py-12 px-4 sm:px-6"
+    >
+      <div className="text-center mb-8 space-y-3">
+        {/* Intimate Dual Presence Emblem */}
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-surface border border-border shadow-elevation-sm mb-1">
           <div className="relative flex items-center justify-center">
-            <span className="w-3.5 h-3.5 rounded-full bg-player-one-ember -mr-1 shadow-sm" />
-            <span className="w-3.5 h-3.5 rounded-full bg-player-two-sage -ml-1 shadow-sm" />
+            <span className="w-4 h-4 rounded-full bg-player-one-ember -mr-1.5 shadow-sm ring-2 ring-surface" />
+            <span className="w-4 h-4 rounded-full bg-player-two-sage -ml-1.5 shadow-sm ring-2 ring-surface" />
+            <span className="absolute w-1.5 h-1.5 rounded-full bg-brand animate-ping" />
           </div>
         </div>
-        <h1 className="text-2xl font-semibold text-on-surface tracking-tight">
-          Create Your Sanctuary
-        </h1>
-        <p className="text-xs text-on-surface-variant max-w-xs mx-auto leading-relaxed">
-          Set up your private space to play, communicate, and stay close across time zones.
-        </p>
+
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-display font-medium text-text-primary tracking-tight">
+            Create Sanctuary
+          </h1>
+          <p className="text-xs text-text-secondary max-w-xs mx-auto leading-relaxed">
+            Dedicate your private space to play, stay present, and build memories across any time zone.
+          </p>
+        </div>
       </div>
 
-      {/* Quick Test / QA Bypass Banner (Development only) */}
+      {/* Quick Test / QA Bypass Sandbox (Development only) */}
       {process.env.NODE_ENV !== "production" && (
-        <div className="mb-5 p-4 rounded-2xl bg-amber-950/20 border border-amber-500/30 text-left space-y-2.5">
+        <div className="mb-5 p-4 rounded-2xl bg-surface border border-border text-left space-y-3 shadow-elevation-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-ping" />
-              <span className="text-xs font-semibold text-amber-400 tracking-wide uppercase font-mono">
-                Quick Test Sandbox
+              <span className="flex h-2 w-2 rounded-full bg-brand animate-pulse" />
+              <span className="text-xs font-semibold text-brand tracking-wider uppercase font-mono">
+                Development Sandbox
               </span>
             </div>
-            <span className="text-[11px] text-amber-300/80 font-mono">
+            <span className="text-[10px] text-text-muted font-mono uppercase tracking-wider">
               Bypass Auth
             </span>
           </div>
-          <p className="text-xs text-neutral-300 leading-relaxed">
+          <p className="text-xs text-text-secondary leading-relaxed">
             Skip registration and test the app immediately as either partner to explore games, video, and presence rituals.
           </p>
-          <div className="grid grid-cols-2 gap-2 pt-1">
+          <div className="grid grid-cols-2 gap-2 pt-0.5">
             <Button
               type="button"
-              variant="amber"
+              variant="ember"
               size="sm"
               onClick={() => handleBypassTestUser("alex")}
               isLoading={isBypassing}
@@ -183,11 +192,11 @@ function RegisterForm() {
             </Button>
             <Button
               type="button"
-              variant="outline"
+              variant="sage"
               size="sm"
               onClick={() => handleBypassTestUser("sam")}
               isLoading={isBypassing}
-              className="w-full text-xs justify-center font-medium border-emerald-500/40 text-emerald-400 hover:bg-emerald-950/30"
+              className="w-full text-xs justify-center font-medium"
             >
               <span>Test as Sam (P2)</span>
             </Button>
@@ -198,7 +207,7 @@ function RegisterForm() {
       {errorMessage && (
         <div
           role="alert"
-          className="mb-4 p-3 rounded-lg bg-status-error/10 border border-status-error/30 space-y-2 text-xs text-status-error"
+          className="mb-4 p-3.5 rounded-xl bg-danger/10 border border-danger/30 space-y-2 text-xs text-danger shadow-sm"
         >
           <div className="flex items-start gap-2.5">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -209,7 +218,7 @@ function RegisterForm() {
               <button
                 type="button"
                 onClick={() => handleBypassTestUser("alex")}
-                className="text-amber-400 underline font-medium hover:text-amber-300 text-xs cursor-pointer"
+                className="text-brand underline font-medium hover:text-brand-hover text-xs cursor-pointer"
               >
                 Click here to bypass signup and enter in Test Mode instead →
               </button>
@@ -218,27 +227,27 @@ function RegisterForm() {
         </div>
       )}
 
-      <Card variant="raised" className="p-6 space-y-5">
+      <div className="bg-surface border border-border rounded-2xl p-6 sm:p-7 space-y-5 shadow-elevation-md">
         {/* Google Sign-Up */}
         <Button
           type="button"
           variant="surface"
           size="md"
-          className="w-full justify-center font-medium border-subtle-border hover:border-shared-amber/40"
+          className="w-full justify-center font-medium border-border hover:border-brand/40"
           onClick={handleGoogleSignUp}
           isLoading={isGoogleSubmitting}
           disabled={isSubmitting}
         >
-          <Globe className="w-4 h-4 mr-2 text-shared-amber" />
-          Sign up with Google
+          <Globe className="w-4 h-4 mr-2 text-brand" />
+          <span>Sign up with Google</span>
         </Button>
 
         <div className="relative flex items-center justify-center">
-          <div className="border-t border-subtle-border w-full" />
-          <span className="bg-surface-raised px-3 text-[11px] font-mono uppercase tracking-wider text-on-surface-variant shrink-0">
+          <div className="border-t border-border-subtle w-full" />
+          <span className="bg-surface px-3 text-[10px] font-mono uppercase tracking-wider text-text-muted shrink-0">
             or with email
           </span>
-          <div className="border-t border-subtle-border w-full" />
+          <div className="border-t border-border-subtle w-full" />
         </div>
 
         {/* Form */}
@@ -280,7 +289,7 @@ function RegisterForm() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="p-1 hover:text-on-surface transition-colors cursor-pointer"
+                className="p-1 text-text-muted hover:text-text-primary transition-colors cursor-pointer"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? (
@@ -307,9 +316,9 @@ function RegisterForm() {
 
           <Button
             type="submit"
-            variant="amber"
-            size="md"
-            className="w-full justify-center"
+            variant="brand"
+            size="lg"
+            className="w-full justify-center font-semibold"
             isLoading={isSubmitting}
             disabled={isGoogleSubmitting}
           >
@@ -317,20 +326,20 @@ function RegisterForm() {
             <ArrowRight className="w-4 h-4 ml-1.5" />
           </Button>
         </form>
-      </Card>
+      </div>
 
       <div className="text-center mt-6">
-        <p className="text-xs text-on-surface-variant">
+        <p className="text-xs text-text-secondary">
           Already registered?{" "}
           <Link
             href="/login"
-            className="text-shared-amber font-semibold hover:underline"
+            className="text-brand font-semibold hover:underline"
           >
             Sign in to existing account
           </Link>
         </p>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

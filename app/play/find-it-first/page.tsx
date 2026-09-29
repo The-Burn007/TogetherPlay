@@ -345,41 +345,41 @@ export default function FindItFirstRoomPage() {
 
   return (
     <Container size="md" className="space-y-4 pt-14 pb-20 max-w-4xl">
-      {/* 1. Antiquarian Tabletop Navigation Bar */}
-      <div className="flex items-center justify-between bg-[#1e1916] border border-amber-900/50 rounded-2xl p-3 shadow-xl">
+      {/* 1. Tabletop Arena Navigation Bar */}
+      <div className="flex items-center justify-between bg-surface border border-border rounded-2xl p-3 shadow-elevation-md">
         <Link
           href="/play"
-          className="flex items-center gap-1.5 text-xs font-mono text-stone-400 hover:text-amber-200 transition-colors"
+          className="flex items-center gap-1.5 text-xs font-mono text-text-muted hover:text-text-primary transition-colors focus-visible:outline-2 focus-visible:outline-brand rounded-lg"
         >
           <ChevronLeft className="w-4 h-4" />
-          <span className="hidden sm:inline">Exit Saloon</span>
+          <span className="hidden sm:inline">Exit Arena</span>
         </Link>
 
         {/* Live Authoritative Score Tracker */}
         <div className="flex items-center gap-3 sm:gap-4">
           <div className="flex items-center gap-2 font-mono text-xs sm:text-sm font-semibold">
             <span
-              className={`px-2 py-0.5 rounded ${
+              className={`px-2.5 py-1 rounded-lg ${
                 activePlayerId === "user_alex"
-                  ? "bg-amber-950 text-amber-400 border border-amber-800"
-                  : "text-amber-300"
+                  ? "bg-player-one-ember/20 text-player-one-ember border border-player-one-ember/40 font-bold"
+                  : "text-text-secondary"
               }`}
             >
               Alex {scores["user_alex"] || 0}
             </span>
-            <span className="text-stone-600">·</span>
+            <span className="text-border">·</span>
             <span
-              className={`px-2 py-0.5 rounded ${
+              className={`px-2.5 py-1 rounded-lg ${
                 activePlayerId === "user_sam"
-                  ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
-                  : "text-emerald-300"
+                  ? "bg-brand/20 text-brand border border-brand/40 font-bold"
+                  : "text-text-secondary"
               }`}
             >
               Sam {scores["user_sam"] || 0}
             </span>
           </div>
 
-          <span className="text-[10px] font-mono uppercase bg-black/60 px-2.5 py-1 rounded-md border border-amber-900/40 text-amber-400 font-bold">
+          <span className="text-[10px] font-mono uppercase bg-background px-2.5 py-1 rounded-md border border-border text-brand font-bold">
             Round {currentRound} / {maxRounds}
           </span>
         </div>
@@ -493,10 +493,10 @@ export default function FindItFirstRoomPage() {
           {dualSessionMode ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Session 1: Alex (London) */}
-              <div className="space-y-2 rounded-2xl p-3 bg-[#171412] border border-amber-900/40 shadow-xl">
+              <div className="space-y-2 rounded-2xl p-3 bg-surface border border-player-one-ember/40 shadow-elevation-md">
                 <div className="flex items-center justify-between px-1 text-xs font-mono">
-                  <span className="font-bold text-amber-400">Player 1: Alex (London)</span>
-                  <span className="text-[10px] text-stone-500">
+                  <span className="font-bold text-player-one-ember">Player 1: Alex (London)</span>
+                  <span className="text-[10px] text-text-muted">
                     Score: {scores["user_alex"] || 0}
                   </span>
                 </div>
@@ -512,10 +512,10 @@ export default function FindItFirstRoomPage() {
               </div>
 
               {/* Session 2: Sam (Tokyo) */}
-              <div className="space-y-2 rounded-2xl p-3 bg-[#171412] border border-emerald-900/40 shadow-xl">
+              <div className="space-y-2 rounded-2xl p-3 bg-surface border border-brand/40 shadow-elevation-md">
                 <div className="flex items-center justify-between px-1 text-xs font-mono">
-                  <span className="font-bold text-emerald-400">Player 2: Sam (Tokyo)</span>
-                  <span className="text-[10px] text-stone-500">
+                  <span className="font-bold text-brand">Player 2: Sam (Tokyo)</span>
+                  <span className="text-[10px] text-text-muted">
                     Score: {scores["user_sam"] || 0}
                   </span>
                 </div>

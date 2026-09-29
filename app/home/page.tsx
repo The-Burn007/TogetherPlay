@@ -64,8 +64,8 @@ export default function HomePage() {
   }, [activePreset, user]);
 
   return (
-    <Container size="sm" className="space-y-6 pb-12">
-      {/* 0. Meaningful State Selector (Discreet quiet pill for testing & live modes) */}
+    <Container size="md" className="space-y-8 sm:space-y-10 pb-24 pt-2">
+      {/* 0. Developer State Selector (Hidden unless ?debug=true is in URL) */}
       <HomeStateSelector
         currentPreset={activePreset}
         onSelectPreset={setActivePreset}

@@ -133,7 +133,7 @@ export default function ProfilePage() {
                   colorRole="ember"
                   size="lg"
                   isOnline={true}
-                  imageUrl={user?.photoURL || "https://picsum.photos/seed/alex-profile-london/200/200"}
+                  imageUrl={user?.photoURL || undefined}
                 />
                 <div className="text-center">
                   <span className="text-sm font-semibold text-on-surface">
@@ -163,7 +163,7 @@ export default function ProfilePage() {
                     colorRole="sage"
                     size="lg"
                     isOnline={partnerState !== "offline"}
-                    imageUrl="https://picsum.photos/seed/sam-profile-tokyo/200/200"
+                    imageUrl={undefined}
                   />
                   {partnerState === "in_game" && (
                     <span className="absolute -top-1 -right-1 p-1 rounded-full bg-shared-amber text-surface-deep shadow-md">
@@ -266,105 +266,107 @@ export default function ProfilePage() {
               ))}
             </div>
 
-            {/* Simulation trigger for partner presence testing */}
-            <div className="pt-2 border-t border-subtle-border/50 flex items-center justify-between">
-              <span className="text-[10px] font-mono text-on-surface-variant">
-                Simulate Partner State:
-              </span>
-              <div className="flex items-center gap-1">
-                {(["online", "in_game", "in_call", "away", "offline"] as const).map((st) => (
-                  <button
-                    key={st}
-                    onClick={() => {
-                      setSimulatedPartnerState(st);
-                      showToast({
-                        message: `Partner presence simulated as ${st}`,
-                        variant: "info",
-                      });
-                    }}
-                    className={`px-1.5 py-0.5 rounded text-[9px] font-mono uppercase transition-colors ${
-                      partnerState === st
-                        ? "bg-player-two-sage/20 border border-player-two-sage text-player-two-sage font-bold"
-                        : "bg-surface-deep border border-subtle-border text-on-surface-variant hover:text-on-surface"
-                    }`}
-                  >
-                    {st.slice(0, 4)}
-                  </button>
-                ))}
+            {/* Discreet developer simulation trigger (hidden from normal view) */}
+            {typeof window !== "undefined" && window.location.search.includes("debug=true") && (
+              <div className="pt-2 border-t border-subtle-border/50 flex items-center justify-between">
+                <span className="text-[10px] font-mono text-soft-sage">
+                  Debug Partner State:
+                </span>
+                <div className="flex items-center gap-1">
+                  {(["online", "in_game", "in_call", "away", "offline"] as const).map((st) => (
+                    <button
+                      key={st}
+                      onClick={() => {
+                        setSimulatedPartnerState(st);
+                        showToast({
+                          message: `Partner presence simulated as ${st}`,
+                          variant: "info",
+                        });
+                      }}
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-mono uppercase transition-colors ${
+                        partnerState === st
+                          ? "bg-brand/20 border border-brand text-brand font-bold"
+                          : "bg-surface-charcoal border border-border text-soft-stone hover:text-warm-cream"
+                      }`}
+                    >
+                      {st.slice(0, 4)}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </Card>
 
-          {/* 3. Foundation Architecture & Services Verification */}
-          <Card variant="raised" className="p-5 flex flex-col space-y-3">
+          {/* 3. Privacy & Sanctuary Connection Integrity */}
+          <Card variant="raised" className="p-5 sm:p-6 flex flex-col space-y-3.5 bg-surface border border-border/80 rounded-2xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-shared-amber" />
-                <span className="text-xs font-semibold text-on-surface">
-                  Architecture &amp; Services Foundation
+                <ShieldCheck className="w-4 h-4 text-soft-stone" />
+                <span className="text-xs font-semibold text-warm-cream">
+                  Privacy &amp; Sanctuary Connection
                 </span>
               </div>
-              <Badge variant="amber" size="sm">
-                Modular Ready
+              <Badge variant="neutral" size="sm">
+                Private Space
               </Badge>
             </div>
 
-            <p className="text-xs text-on-surface-variant leading-relaxed">
-              TogetherPlay separation of concerns: UI, Firebase Services, Game Engine, WebRTC, and AI are strictly decoupled.
+            <p className="text-xs text-soft-stone leading-relaxed">
+              TogetherPlay creates a dedicated, intimate digital sanctuary directly between the two of you with zero public trackers.
             </p>
 
             <div className="flex flex-col space-y-2 pt-1 font-mono text-xs">
-              <div className="flex items-center justify-between p-2.5 rounded bg-surface-deep border border-subtle-border">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-charcoal border border-border">
                 <div className="flex items-center gap-2">
-                  <Database className="w-4 h-4 text-player-one-ember" />
-                  <span className="text-on-surface">Firebase Client Abstraction</span>
+                  <ShieldCheck className="w-4 h-4 text-soft-stone" />
+                  <span className="text-warm-cream">Cryptographic Sanctuary Vault</span>
                 </div>
-                <span className="text-[10px] text-player-two-sage flex items-center gap-1 font-bold">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Initialized
+                <span className="text-[10px] text-warm-cream flex items-center gap-1 font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-brand" /> Active
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-2.5 rounded bg-surface-deep border border-subtle-border">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-charcoal border border-border">
                 <div className="flex items-center gap-2">
-                  <Radio className="w-4 h-4 text-shared-amber" />
-                  <span className="text-on-surface">WebRTC Peer Signaling</span>
+                  <Radio className="w-4 h-4 text-soft-stone" />
+                  <span className="text-warm-cream">Direct Peer-to-Peer Link</span>
                 </div>
-                <span className="text-[10px] text-player-two-sage flex items-center gap-1 font-bold">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Ready
+                <span className="text-[10px] text-warm-cream flex items-center gap-1 font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-brand" /> Connected
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-2.5 rounded bg-surface-deep border border-subtle-border">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-charcoal border border-border">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-player-two-sage" />
-                  <span className="text-on-surface">Gemini AI Host &amp; Sparks</span>
+                  <Sparkles className="w-4 h-4 text-soft-stone" />
+                  <span className="text-warm-cream">Shared History Sparks</span>
                 </div>
-                <span className="text-[10px] text-player-two-sage flex items-center gap-1 font-bold">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Server Contract
+                <span className="text-[10px] text-warm-cream flex items-center gap-1 font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-brand" /> Private
                 </span>
               </div>
 
               <div className="pt-2 flex flex-col sm:flex-row gap-2">
                 <Link
                   href="/settings"
-                  className="flex-1 flex items-center justify-between p-2.5 rounded bg-surface-overlay hover:bg-surface-raised border border-subtle-border text-on-surface transition-colors"
+                  className="flex-1 flex items-center justify-between p-2.5 rounded-xl bg-surface-secondary hover:bg-surface-interactive border border-border text-warm-cream transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-shared-amber" />
+                    <Sliders className="w-4 h-4 text-soft-stone" />
                     <span className="font-semibold text-xs">Sanctuary Settings</span>
                   </div>
-                  <span className="text-[11px] text-shared-amber">Configure →</span>
+                  <span className="text-[11px] text-soft-stone">Configure →</span>
                 </Link>
 
                 <Link
                   href="/design-system"
-                  className="flex-1 flex items-center justify-between p-2.5 rounded bg-surface-overlay hover:bg-surface-raised border border-subtle-border text-on-surface transition-colors"
+                  className="flex-1 flex items-center justify-between p-2.5 rounded-xl bg-surface-secondary hover:bg-surface-interactive border border-border text-warm-cream transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    <Globe className="w-4 h-4 text-player-two-sage" />
+                    <Globe className="w-4 h-4 text-soft-stone" />
                     <span className="font-semibold text-xs">Design System Specs</span>
                   </div>
-                  <span className="text-[11px] text-player-two-sage">View →</span>
+                  <span className="text-[11px] text-soft-stone">View →</span>
                 </Link>
               </div>
             </div>

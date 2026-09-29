@@ -82,14 +82,14 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
     switch (type) {
       case "partner_invited":
       case "game_started":
-        return "bg-player-two-sage/20 text-player-two-sage border border-border-sage/40";
+        return "bg-brand/15 text-brand border border-border-strong";
       case "challenge_sent":
-        return "bg-shared-amber/20 text-shared-amber border border-border-amber/40";
+        return "bg-warning/15 text-warning border border-warning/30";
       case "rematch_requested":
-        return "bg-player-one-ember/20 text-player-one-ember border border-border-ember/40";
+        return "bg-danger/15 text-danger border border-danger/30";
       case "daily_moment":
       default:
-        return "bg-rose-500/20 text-rose-400 border border-rose-500/30";
+        return "bg-brand/15 text-brand border border-border";
     }
   };
 
@@ -191,7 +191,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
 
         {/* Notifications List */}
         {notifications.length === 0 ? (
-          <div className="py-12 text-center text-xs text-on-surface-variant font-mono">
+          <div className="py-12 text-center text-xs text-text-muted font-mono">
             No whispers or unread pings at this time.
           </div>
         ) : (
@@ -202,8 +202,8 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                 onClick={() => markAsRead(item.id)}
                 className={`p-3.5 rounded-xl border transition-all flex flex-col gap-2 cursor-pointer ${
                   !item.read
-                    ? "bg-surface-raised border-border-amber/40 shadow-sm"
-                    : "bg-surface-deep border-subtle-border opacity-85 hover:opacity-100"
+                    ? "bg-surface-raised border-border-strong shadow-elevation-sm"
+                    : "bg-surface border-border opacity-85 hover:opacity-100"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -216,21 +216,21 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                       {getNotificationIcon(item.type)}
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-xs font-semibold text-on-surface leading-tight">
+                      <span className="text-xs font-semibold text-text-primary leading-tight">
                         {item.title}
                       </span>
-                      <span className="text-[10px] font-mono text-on-surface-variant">
+                      <span className="text-[10px] font-mono text-text-muted">
                         From {item.fromName} · {formatTimestamp(item.createdAt)}
                       </span>
                     </div>
                   </div>
 
                   {!item.read ? (
-                    <span className="w-2 h-2 rounded-full bg-shared-amber shrink-0 animate-pulse mt-1" />
+                    <span className="w-2 h-2 rounded-full bg-brand shrink-0 animate-pulse mt-1" />
                   ) : null}
                 </div>
 
-                <p className="text-xs text-on-surface-variant pl-9 leading-relaxed">
+                <p className="text-xs text-text-secondary pl-9 leading-relaxed">
                   {item.body}
                 </p>
 
@@ -239,7 +239,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                     <Link
                       href={item.actionHref}
                       onClick={onClose}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-shared-amber hover:underline"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline"
                     >
                       <span>{item.actionLabel || "View"}</span>
                       <ArrowRight className="w-3.5 h-3.5" />

@@ -13,6 +13,7 @@ import { DeleteConfirmationModal } from "@/features/memories/DeleteConfirmationM
 import { MemoriesSkeleton } from "@/features/memories/MemoriesSkeleton";
 import { MemoriesEmptyState } from "@/features/memories/MemoriesEmptyState";
 import { useToast } from "@/components/ui/Toast";
+import { motion } from "motion/react";
 import {
   Heart,
   Flame,
@@ -84,7 +85,7 @@ export default function MemoriesPage() {
         setMemories(fetchedMemories);
         setIsLoading(false);
       },
-      (error) => {
+      () => {
         setErrorMessage("Could not connect to couple archive. Database unavailable.");
         setIsLoading(false);
       }
@@ -127,7 +128,6 @@ export default function MemoriesPage() {
           payload,
           mediaFile
         );
-        // Optimistically update list if subscription hasn't fired yet
         setMemories((prev) => [created, ...prev.filter((m) => m.id !== created.id)]);
         showToast("Memory sealed in couple archive");
       } catch (err: unknown) {
@@ -166,33 +166,34 @@ export default function MemoriesPage() {
 
   const filterTabs: { id: MemoryFilter; label: string; count: number; icon: React.ReactNode }[] = [
     { id: "all", label: "All Artifacts", count: counts.all, icon: null },
-    { id: "photo", label: "Photos", count: counts.photo, icon: <Camera className="w-3 h-3" /> },
-    { id: "game_moment", label: "Game Moments", count: counts.game_moment, icon: <Gamepad2 className="w-3 h-3" /> },
-    { id: "milestone", label: "Milestones", count: counts.milestone, icon: <Trophy className="w-3 h-3" /> },
-    { id: "relationship_date", label: "Dates", count: counts.relationship_date, icon: <CalendarHeart className="w-3 h-3" /> },
-    { id: "note", label: "Notes", count: counts.note, icon: <FileText className="w-3 h-3" /> },
+    { id: "photo", label: "Photos", count: counts.photo, icon: <Camera className="w-3.5 h-3.5" /> },
+    { id: "game_moment", label: "Game Moments", count: counts.game_moment, icon: <Gamepad2 className="w-3.5 h-3.5" /> },
+    { id: "milestone", label: "Milestones", count: counts.milestone, icon: <Trophy className="w-3.5 h-3.5" /> },
+    { id: "relationship_date", label: "Dates", count: counts.relationship_date, icon: <CalendarHeart className="w-3.5 h-3.5" /> },
+    { id: "note", label: "Notes", count: counts.note, icon: <FileText className="w-3.5 h-3.5" /> },
   ];
 
   return (
-    <Container size="sm" className="space-y-6 pb-16">
-      {/* 1. Archive Header & Sanctuary Stats */}
-      <header className="flex flex-col space-y-4 pt-2">
+    <Container size="sm" className="space-y-6 pb-20">
+      {/* 1. Header & Stats */}
+      <header className="flex flex-col space-y-4 pt-1">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-[10px] font-mono">
-              <span className="uppercase tracking-widest text-shared-amber font-semibold">
-                Private Visual Archive
+            <div className="flex items-center gap-2 text-[11px] font-mono">
+              <span className="w-2 h-2 rounded-full bg-brand" />
+              <span className="uppercase tracking-widest text-text-muted font-semibold">
+                Private Archive
               </span>
-              <span className="text-on-surface-muted">·</span>
-              <span className="flex items-center gap-1 text-player-two-sage">
-                <ShieldCheck className="w-3 h-3" />
-                <span>Zero Public URLs</span>
+              <span className="text-border">·</span>
+              <span className="flex items-center gap-1 text-brand">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Encrypted · Zero Public URLs</span>
               </span>
             </div>
-            <h1 className="text-2xl font-semibold text-on-surface tracking-tight">
-              Timeline &amp; Memories
+            <h1 className="text-2xl sm:text-3xl font-display font-medium text-text-primary tracking-tight">
+              Our Little History
             </h1>
-            <p className="text-xs text-on-surface-variant leading-relaxed">
+            <p className="text-xs text-text-secondary leading-relaxed">
               Every photo finish, spoken reflection, and shared milestone preserved forever.
             </p>
           </div>
@@ -200,31 +201,31 @@ export default function MemoriesPage() {
           <button
             id="open-upload-modal-btn"
             onClick={() => setIsUploadOpen(true)}
-            className="self-start sm:self-center flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-mono bg-shared-amber text-surface-deep font-semibold hover:brightness-105 transition-all shadow-sm shrink-0"
+            className="self-start sm:self-center flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-mono bg-brand hover:bg-brand-hover text-text-on-mint font-semibold transition-all shadow-sm shrink-0 cursor-pointer active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Preserve Memory</span>
           </button>
         </div>
 
-        {/* Sanctuary Milestone Stats Banner */}
-        <div className="grid grid-cols-3 gap-2 bg-surface-raised border border-subtle-border rounded-xl p-3.5 shadow-md">
+        {/* Milestone Stats Banner */}
+        <div className="grid grid-cols-3 gap-2 bg-surface border border-border rounded-2xl p-4 shadow-elevation-sm">
           <div className="flex flex-col items-center text-center">
-            <div className="flex items-center gap-1 text-shared-amber mb-0.5">
+            <div className="flex items-center gap-1 text-brand mb-0.5">
               <Heart className="w-3.5 h-3.5 fill-current" />
-              <span className="text-base font-bold font-mono">{memories.length}</span>
+              <span className="text-base font-bold font-tabular">{memories.length}</span>
             </div>
-            <span className="text-[10px] font-mono text-on-surface-variant">
-              Preserved Artifacts
+            <span className="text-[10px] font-mono text-text-muted">
+              Artifacts
             </span>
           </div>
 
-          <div className="flex flex-col items-center text-center border-x border-subtle-border">
+          <div className="flex flex-col items-center text-center border-x border-border">
             <div className="flex items-center gap-1 text-player-one-ember mb-0.5">
               <Flame className="w-3.5 h-3.5 fill-current" />
-              <span className="text-base font-bold font-mono">42 Days</span>
+              <span className="text-base font-bold font-tabular">42 Days</span>
             </div>
-            <span className="text-[10px] font-mono text-on-surface-variant">
+            <span className="text-[10px] font-mono text-text-muted">
               Active Streak
             </span>
           </div>
@@ -232,10 +233,10 @@ export default function MemoriesPage() {
           <div className="flex flex-col items-center text-center">
             <div className="flex items-center gap-1 text-player-two-sage mb-0.5">
               <Compass className="w-3.5 h-3.5" />
-              <span className="text-base font-bold font-mono">9,560 km</span>
+              <span className="text-base font-bold font-tabular">9,560 km</span>
             </div>
-            <span className="text-[10px] font-mono text-on-surface-variant">
-              Distance Bridged
+            <span className="text-[10px] font-mono text-text-muted">
+              Bridged
             </span>
           </div>
         </div>
@@ -245,7 +246,7 @@ export default function MemoriesPage() {
       {errorMessage && (
         <div
           id="memories-error-banner"
-          className="flex items-center justify-between p-3.5 rounded-xl bg-player-one-ember/15 border border-player-one-ember/30 text-xs font-mono text-player-one-ember"
+          className="flex items-center justify-between p-4 rounded-xl bg-danger/10 border border-danger/30 text-xs font-mono text-danger"
         >
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
@@ -266,7 +267,7 @@ export default function MemoriesPage() {
                   setIsLoading(false);
                 });
             }}
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-player-one-ember/20 hover:bg-player-one-ember/30 text-player-one-ember font-semibold transition-colors"
+            className="flex items-center gap-1 px-3 py-1 rounded-lg bg-danger/20 hover:bg-danger/30 text-danger font-semibold transition-colors cursor-pointer"
           >
             <RefreshCw className="w-3 h-3" />
             <span>Retry</span>
@@ -281,19 +282,19 @@ export default function MemoriesPage() {
             key={tab.id}
             id={`filter-tab-${tab.id}`}
             onClick={() => setActiveFilter(tab.id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono tracking-wider whitespace-nowrap transition-all border ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-mono tracking-wider whitespace-nowrap transition-all border cursor-pointer ${
               activeFilter === tab.id
-                ? "bg-shared-amber text-surface-deep border-shared-amber font-semibold"
-                : "bg-surface-raised text-on-surface-variant border-subtle-border hover:text-on-surface"
+                ? "bg-brand text-text-on-mint border-brand font-semibold shadow-sm"
+                : "bg-surface text-text-secondary border-border hover:text-text-primary hover:bg-surface-raised"
             }`}
           >
             {tab.icon}
             <span>{tab.label}</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-tabular ${
                 activeFilter === tab.id
-                  ? "bg-surface-deep/20 text-surface-deep"
-                  : "bg-surface-deep text-on-surface-muted"
+                  ? "bg-text-on-mint/15 text-text-on-mint"
+                  : "bg-surface-muted text-text-muted"
               }`}
             >
               {tab.count}
@@ -314,11 +315,16 @@ export default function MemoriesPage() {
         />
       )}
 
-      {/* 6. Timeline-Oriented Composition */}
+      {/* 6. Timeline-Oriented Visual Artifacts */}
       {!isLoading && filteredMemories.length > 0 && (
-        <div className="relative flex flex-col space-y-6 pt-2">
-          {/* Visual Continuous Timeline Spine */}
-          <div className="absolute left-1.5 sm:left-2 top-4 bottom-4 w-[1px] bg-subtle-border -z-0" />
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+          className="relative flex flex-col space-y-6 pt-2"
+        >
+          {/* Continuous Timeline Spine */}
+          <div className="absolute left-2.5 sm:left-3 top-4 bottom-4 w-[1px] bg-border-subtle -z-0" />
 
           {filteredMemories.map((memory, index) => (
             <MemoriesTimelineItem
@@ -329,7 +335,7 @@ export default function MemoriesPage() {
               onSelect={(m) => setSelectedMemory(m)}
             />
           ))}
-        </div>
+        </motion.div>
       )}
 
       {/* 7. Memory Detail Modal */}
@@ -340,7 +346,7 @@ export default function MemoriesPage() {
         onRequestDelete={(m) => setMemoryToDelete(m)}
       />
 
-      {/* 8. Memory Upload Modal (Upload State) */}
+      {/* 8. Memory Upload Modal */}
       <MemoryUploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}

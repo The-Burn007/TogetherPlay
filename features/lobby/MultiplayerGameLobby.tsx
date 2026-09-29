@@ -13,20 +13,17 @@ import {
   WifiOff,
   ChevronLeft,
   Sparkles,
-  Heart,
   Send,
   RefreshCw,
   Play,
   CheckCircle2,
-  AlertCircle,
-  HelpCircle,
   Layers,
   ArrowRight,
+  ShieldCheck,
 } from "lucide-react";
 import { Container } from "@/components/layout/Container";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { Avatar } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toast";
 import { TOGETHERPLAY_GAMES } from "@/features/games/gameCatalog";
@@ -34,7 +31,6 @@ import { usePresence } from "@/lib/presence/usePresence";
 import { useNotifications } from "@/lib/presence/useNotifications";
 import { PartnerPresenceBadge } from "@/components/ui/PartnerPresenceBadge";
 import type { GameType } from "@/types/domain";
-import type { LobbyFlowState } from "./types";
 import { useMultiplayerLobby } from "./useMultiplayerLobby";
 
 interface MultiplayerGameLobbyProps {
@@ -46,7 +42,7 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
 }) => {
   const { showToast } = useToast();
   const { partnerState, partnerConnection, partnerDisplayName, partnerCity } = usePresence();
-  const { invitePartner, notifyGameStarted } = useNotifications();
+  const { invitePartner } = useNotifications();
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
 
   const {
@@ -89,39 +85,41 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
     }
   };
 
+  const bothReady = playerA.isReady && playerB.isReady;
+
   return (
-    <Container size="md" className="space-y-6 pb-16">
-      {/* 1. Header Navigation & State Preview Pill */}
-      <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-subtle-border pb-4">
+    <Container size="md" className="space-y-6 pb-20">
+      {/* 1. Header Navigation & State Stepper */}
+      <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-border pb-4">
         <Link
           href="/play"
-          className="inline-flex items-center gap-1 text-xs font-mono text-on-surface-variant hover:text-on-surface transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-mono text-text-muted hover:text-text-primary transition-colors focus-visible:outline-2 focus-visible:outline-brand"
         >
           <ChevronLeft className="w-4 h-4" />
-          <span>Back to Game Vault</span>
+          <span>Back to Anthology</span>
         </Link>
 
-        {/* State Preview Stepper (For verifying all 5 required states) */}
-        <div className="flex items-center gap-1 bg-surface-deep border border-subtle-border rounded-full p-1 text-[11px] font-mono overflow-x-auto max-w-full">
-          <span className="text-on-surface-variant/60 px-2 py-0.5 text-[10px] uppercase font-semibold hidden md:inline">
-            Lobby State:
+        {/* Discreet Simulation State Stepper (Preserved for full testability across all 5 states) */}
+        <div className="flex items-center gap-1 bg-surface border border-border rounded-xl p-1 text-[11px] font-mono overflow-x-auto max-w-full">
+          <span className="text-text-muted px-2 py-0.5 text-[10px] uppercase font-semibold hidden md:inline">
+            State:
           </span>
           {(
             [
-              { key: "waiting", label: "1. Waiting" },
-              { key: "partner_joined", label: "2. Partner Joined" },
-              { key: "ready", label: "3. Ready" },
-              { key: "starting", label: "4. Starting" },
-              { key: "disconnected", label: "5. Disconnected" },
+              { key: "waiting", label: "Waiting" },
+              { key: "partner_joined", label: "Joined" },
+              { key: "ready", label: "Ready" },
+              { key: "starting", label: "Starting" },
+              { key: "disconnected", label: "Offline" },
             ] as const
           ).map((st) => (
             <button
               key={st.key}
               onClick={() => setExplicitState(st.key)}
-              className={`px-2.5 py-1 rounded-full transition-all whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg transition-all whitespace-nowrap cursor-pointer ${
                 lobbyState === st.key
-                  ? "bg-surface-raised text-shared-amber font-semibold shadow-sm border border-subtle-border"
-                  : "text-on-surface-variant hover:text-on-surface"
+                  ? "bg-brand text-text-on-mint font-semibold shadow-sm"
+                  : "text-text-secondary hover:text-text-primary hover:bg-surface-raised"
               }`}
             >
               {st.label}
@@ -130,51 +128,51 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
         </div>
       </header>
 
-      {/* 2. Atmospheric Couple Sanctuary Header */}
-      <section className="text-center space-y-2 py-2">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-raised border border-subtle-border text-[11px] font-mono text-on-surface-variant">
-          <span className="w-2 h-2 rounded-full bg-shared-amber animate-pulse" />
-          <span>Private Sanctuary</span>
-          <span className="text-subtle-border">·</span>
+      {/* 2. Atmospheric Ready Banner: "We're About to Play" */}
+      <section className="text-center space-y-2 py-1">
+        <div className="inline-flex items-center gap-2 text-xs font-mono text-text-muted">
+          <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
+          <span className="font-semibold text-text-primary">Shared Match Chamber</span>
+          <span className="text-text-muted" aria-hidden="true">·</span>
           <span>Room #{sessionId.slice(-5)}</span>
         </div>
 
-        <h1 className="text-2xl sm:text-3xl font-semibold text-on-surface tracking-tight">
-          Tonight&apos;s Shared Space
+        <h1 className="font-display text-2xl sm:text-3xl text-text-primary tracking-tight">
+          Tonight&apos;s Match Space
         </h1>
 
-        <p className="text-xs sm:text-sm text-on-surface-variant max-w-lg mx-auto">
-          London ({playerA.localTime}) ⇄ Tokyo ({playerB.localTime}) · 9,560 km apart
+        <p className="text-xs sm:text-sm text-text-secondary max-w-lg mx-auto">
+          London ({playerA.localTime}) ⇄ Tokyo ({playerB.localTime}) · <span className="font-tabular">9,560 km</span> bridged
         </p>
       </section>
 
-      {/* 3. Disconnect Alert Banner (When in disconnected state) */}
+      {/* 3. Disconnect Alert Banner (When connection drops) */}
       {lobbyState === "disconnected" && (
         <Card
           variant="raised"
-          className="p-5 border-player-one-ember/40 bg-player-one-ember/10 space-y-3 animate-in fade-in"
+          className="p-5 border-danger/40 bg-danger/10 space-y-3 animate-in fade-in"
         >
           <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-full bg-player-one-ember/20 text-player-one-ember flex items-center justify-center shrink-0 mt-0.5">
+            <div className="w-9 h-9 rounded-full bg-danger/20 text-danger flex items-center justify-center shrink-0 mt-0.5">
               <WifiOff className="w-5 h-5" />
             </div>
             <div className="space-y-1 flex-1">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-on-surface">
-                  Transatlantic Connection Paused
+                <h3 className="text-sm font-semibold text-text-primary">
+                  Transcontinental Link Paused
                 </h3>
-                <span className="text-[10px] font-mono text-player-one-ember">
-                  Last active 14s ago
+                <span className="text-[10px] font-mono text-danger">
+                  Heartbeat lost
                 </span>
               </div>
-              <p className="text-xs text-on-surface-variant leading-relaxed">
-                Unable to reach Tokyo WebRTC mesh peer. Reconnecting to restore heartbeat...
+              <p className="text-xs text-text-secondary leading-relaxed">
+                Unable to reach Tokyo peer over WebRTC. Reconnecting automatically...
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 pt-1">
             <Button
-              variant="amber"
+              variant="brand"
               size="sm"
               onClick={triggerReconnect}
               className="text-xs"
@@ -195,13 +193,94 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
         </Card>
       )}
 
-      {/* 4. Dual Player Chamber (Private to Two Partners) */}
+      {/* 4. The Chosen Game Showcase (Game Identity) */}
+      <Card variant="raised" className="p-5 sm:p-6 space-y-4 border border-border">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2 text-xs font-mono">
+            <span className="text-brand font-semibold uppercase tracking-wider">
+              Chosen Experience
+            </span>
+            <span className="text-text-muted" aria-hidden="true">·</span>
+            <span className="text-text-secondary">{selectedGame.badgeLabel}</span>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsCatalogOpen(true)}
+            className="text-xs font-mono text-text-secondary hover:text-text-primary self-start sm:self-auto"
+          >
+            <Layers className="w-3.5 h-3.5 mr-1.5 text-brand" />
+            Change Game
+          </Button>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex items-baseline justify-between flex-wrap gap-2">
+            <h2 className="font-display text-xl sm:text-2xl text-text-primary tracking-tight">
+              {selectedGame.title}
+            </h2>
+            <span className="text-xs font-mono text-text-muted">
+              {selectedGame.subtitle}
+            </span>
+          </div>
+
+          <p className="text-xs sm:text-sm text-text-secondary leading-relaxed">
+            {selectedGame.description}
+          </p>
+        </div>
+
+        {/* Game Metadata Strip (Unboxed metadata) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs font-mono">
+          <div className="p-2.5 rounded-xl bg-background border border-border space-y-0.5">
+            <div className="flex items-center gap-1.5 text-[10px] text-text-muted">
+              <Clock className="w-3 h-3 text-brand" />
+              <span>Duration</span>
+            </div>
+            <div className="font-semibold text-text-primary font-tabular">{selectedGame.duration}</div>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-background border border-border space-y-0.5">
+            <div className="flex items-center gap-1.5 text-[10px] text-text-muted">
+              <Video className="w-3 h-3 text-brand" />
+              <span>Video Link</span>
+            </div>
+            <div className="font-semibold text-text-primary truncate">
+              {selectedGame.videoSupport}
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-surface-secondary border border-border space-y-0.5">
+            <div className="flex items-center gap-1.5 text-[10px] text-soft-sage">
+              <Sparkles className="w-3 h-3 text-soft-stone" />
+              <span>Playstyle</span>
+            </div>
+            <div className="font-semibold text-warm-cream truncate">
+              {selectedGame.playStyle}
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-surface-secondary border border-border space-y-0.5">
+            <div className="flex items-center gap-1.5 text-[10px] text-soft-sage">
+              <ShieldCheck className="w-3 h-3 text-soft-stone" />
+              <span>Connection</span>
+            </div>
+            <div className="font-semibold text-warm-cream truncate">
+              Real-Time Synced
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* 5. Dual Player Chambers (Prioritizing Both Players & Readiness) */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4 relative">
-        {/* PLAYER A (Alex / You - London) */}
+        {/* PLAYER A (You / Alex - London) */}
         <Card
           variant="raised"
-          className={`p-5 flex flex-col justify-between space-y-4 border transition-colors ${
-            playerA.isReady ? "border-player-one-ember/60" : "border-subtle-border"
+          className={`p-5 flex flex-col justify-between space-y-4 border transition-all ${
+            playerA.isReady
+              ? "border-brand shadow-mint-glow bg-surface-raised"
+              : "border-border"
           }`}
         >
           <div className="flex items-start justify-between">
@@ -215,57 +294,50 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
               />
               <div className="space-y-0.5">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-semibold text-on-surface">
+                  <span className="text-sm font-semibold text-text-primary">
                     {playerA.name} (You)
                   </span>
-                  <Badge variant="ember" size="sm">
-                    Ember
-                  </Badge>
                 </div>
-                <div className="text-[11px] font-mono text-on-surface-variant">
-                  {playerA.city} · {playerA.localTime}
-                </div>
-                <div className="text-[10px] text-on-surface-variant/70">
-                  {playerA.weather}
+                <div className="text-xs font-mono text-text-muted">
+                  {playerA.city} · <span className="font-tabular">{playerA.localTime}</span>
                 </div>
               </div>
             </div>
 
-            {/* Connection / Latency */}
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-deep border border-subtle-border text-[10px] font-mono text-on-surface-variant">
-              <Wifi className="w-3 h-3 text-player-two-sage" />
-              <span>{connectionStats.latencyMs}ms</span>
+            {/* Latency Readout */}
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-secondary border border-border text-xs font-mono text-soft-sage">
+              <Wifi className="w-3 h-3 text-soft-stone" />
+              <span className="font-tabular text-warm-cream">{connectionStats.latencyMs}ms</span>
             </div>
           </div>
 
-          {/* Video & Audio Preview Frame */}
-          <div className="rounded-xl bg-surface-deep border border-subtle-border p-3 space-y-2.5">
-            <div className="flex items-center justify-between text-[11px] font-mono text-on-surface-variant">
+          {/* Discreet Camera & Audio Preview */}
+          <div className="rounded-xl bg-surface-charcoal border border-border p-3 space-y-2">
+            <div className="flex items-center justify-between text-xs font-mono text-soft-sage">
               <span className="flex items-center gap-1.5">
-                <Video className="w-3.5 h-3.5 text-shared-amber" />
-                <span>Camera & Audio Check</span>
+                <Video className="w-3.5 h-3.5 text-soft-stone" />
+                <span>Camera & Mic Check</span>
               </span>
-              <span className="text-[10px] text-player-two-sage">
+              <span className="text-brand font-medium">
                 {playerA.videoEnabled ? "Camera Active" : "Camera Off"}
               </span>
             </div>
 
-            {/* Soft Camera Simulation Viewport */}
-            <div className="relative h-28 sm:h-32 rounded-lg bg-surface-base border border-subtle-border/70 overflow-hidden flex items-center justify-center">
+            <div className="relative h-28 rounded-lg bg-surface border border-border overflow-hidden flex items-center justify-center">
               {playerA.videoEnabled ? (
-                <div className="absolute inset-0 bg-neutral-900/80 flex flex-col items-center justify-center p-3 text-center">
-                  <div className="w-10 h-10 rounded-full bg-player-one-ember/20 text-player-one-ember flex items-center justify-center mb-1">
-                    <Video className="w-5 h-5" />
+                <div className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center p-3 text-center">
+                  <div className="w-9 h-9 rounded-full bg-brand/15 text-brand flex items-center justify-center mb-1">
+                    <Video className="w-4 h-4" />
                   </div>
-                  <span className="text-[11px] font-medium text-on-surface">
-                    Alex&apos;s Camera Stream
+                  <span className="text-xs font-medium text-text-primary">
+                    Alex&apos;s Feed
                   </span>
-                  <span className="text-[9px] font-mono text-on-surface-variant">
-                    720p HD · 30 FPS · London Room
+                  <span className="text-[10px] font-mono text-text-muted">
+                    720p HD · London Studio
                   </span>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center text-on-surface-variant space-y-1">
+                <div className="flex flex-col items-center justify-center text-text-muted space-y-1">
                   <VideoOff className="w-5 h-5" />
                   <span className="text-[10px] font-mono">Camera Paused</span>
                 </div>
@@ -276,10 +348,10 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
                 <button
                   onClick={togglePlayerAVideo}
                   title="Toggle Camera"
-                  className={`w-7 h-7 rounded-md flex items-center justify-center transition-all ${
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
                     playerA.videoEnabled
-                      ? "bg-surface-raised text-on-surface hover:bg-surface-overlay"
-                      : "bg-player-one-ember text-surface-deep font-bold"
+                      ? "bg-surface-raised text-text-primary hover:bg-surface-overlay border border-border"
+                      : "bg-danger text-text-on-mint font-bold"
                   }`}
                 >
                   {playerA.videoEnabled ? (
@@ -291,10 +363,10 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
                 <button
                   onClick={togglePlayerAAudio}
                   title="Toggle Microphone"
-                  className={`w-7 h-7 rounded-md flex items-center justify-center transition-all ${
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
                     playerA.audioEnabled
-                      ? "bg-surface-raised text-on-surface hover:bg-surface-overlay"
-                      : "bg-player-one-ember text-surface-deep font-bold"
+                      ? "bg-surface-raised text-text-primary hover:bg-surface-overlay border border-border"
+                      : "bg-danger text-text-on-mint font-bold"
                   }`}
                 >
                   {playerA.audioEnabled ? (
@@ -307,21 +379,21 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
             </div>
           </div>
 
-          {/* Player A Ready Status & Action */}
+          {/* Player A Ready Toggle */}
           <div className="pt-1 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-xs font-mono">
               <span
                 className={`w-2.5 h-2.5 rounded-full ${
-                  playerA.isReady ? "bg-shared-amber" : "bg-on-surface-variant/40"
+                  playerA.isReady ? "bg-brand animate-pulse" : "bg-text-muted/40"
                 }`}
               />
-              <span className="text-xs font-mono">
-                {playerA.isReady ? "Marked Ready" : "Preparing..."}
+              <span className={playerA.isReady ? "text-brand font-semibold" : "text-text-muted"}>
+                {playerA.isReady ? "Ready to Play" : "Preparing..."}
               </span>
             </div>
 
             <Button
-              variant={playerA.isReady ? "ghost" : "amber"}
+              variant={playerA.isReady ? "outline" : "brand"}
               size="sm"
               onClick={togglePlayerAReady}
               disabled={lobbyState === "starting" || lobbyState === "disconnected"}
@@ -332,15 +404,15 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
           </div>
         </Card>
 
-        {/* PLAYER B (Sam / Partner - Tokyo) */}
+        {/* PLAYER B (Partner / Sam - Tokyo) */}
         <Card
           variant="raised"
-          className={`p-5 flex flex-col justify-between space-y-4 border transition-colors ${
+          className={`p-5 flex flex-col justify-between space-y-4 border transition-all ${
             playerB.isReady
-              ? "border-player-two-sage/60"
+              ? "border-brand shadow-mint-glow bg-surface-raised"
               : lobbyState === "waiting"
-              ? "border-dashed border-subtle-border"
-              : "border-subtle-border"
+              ? "border-dashed border-border"
+              : "border-border"
           }`}
         >
           <div className="flex items-start justify-between">
@@ -354,30 +426,24 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
                   imageUrl={playerB.avatarUrl}
                 />
                 {!playerB.isInLobby && (
-                  <div className="absolute inset-0 rounded-full bg-surface-base/60 backdrop-blur-[1px] flex items-center justify-center">
-                    <span className="w-2 h-2 rounded-full bg-shared-amber animate-ping" />
+                  <div className="absolute inset-0 rounded-full bg-background/60 backdrop-blur-[1px] flex items-center justify-center">
+                    <span className="w-2 h-2 rounded-full bg-brand animate-ping" />
                   </div>
                 )}
               </div>
               <div className="space-y-0.5">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-semibold text-on-surface">
+                  <span className="text-sm font-semibold text-text-primary">
                     {playerB.name}
                   </span>
-                  <Badge variant="sage" size="sm">
-                    Sage
-                  </Badge>
                 </div>
-                <div className="text-[11px] font-mono text-on-surface-variant">
-                  {playerB.city} · {playerB.localTime}
-                </div>
-                <div className="text-[10px] text-on-surface-variant/70">
-                  {playerB.weather}
+                <div className="text-xs font-mono text-text-muted">
+                  {playerB.city} · <span className="font-tabular">{playerB.localTime}</span>
                 </div>
               </div>
             </div>
 
-            {/* Connection / Latency & Real-time Presence */}
+            {/* Realtime Presence & Latency */}
             <div className="flex items-center gap-2">
               <PartnerPresenceBadge
                 partnerName={partnerDisplayName || playerB.name}
@@ -386,15 +452,15 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
                 connectionStatus={partnerConnection}
                 variant="compact"
               />
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-deep border border-subtle-border text-[10px] font-mono text-on-surface-variant">
+              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-surface-secondary border border-border text-xs font-mono text-soft-sage">
                 {playerB.isInLobby && lobbyState !== "disconnected" ? (
                   <>
-                    <Wifi className="w-3 h-3 text-player-two-sage" />
-                    <span>{playerB.latencyMs}ms</span>
+                    <Wifi className="w-3 h-3 text-soft-stone" />
+                    <span className="font-tabular text-warm-cream">{playerB.latencyMs}ms</span>
                   </>
                 ) : (
                   <>
-                    <WifiOff className="w-3 h-3 text-on-surface-variant/50" />
+                    <WifiOff className="w-3 h-3 text-soft-sage" />
                     <span>Offline</span>
                   </>
                 )}
@@ -402,24 +468,24 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
             </div>
           </div>
 
-          {/* Sam's Chamber Content depending on state */}
+          {/* Sam's Chamber Content */}
           {lobbyState === "waiting" || !playerB.isInLobby ? (
-            <div className="rounded-xl bg-surface-deep border border-subtle-border p-4 flex flex-col items-center justify-center text-center space-y-3 h-36 sm:h-40">
-              <div className="w-10 h-10 rounded-full bg-shared-amber/10 border border-shared-amber/30 text-shared-amber flex items-center justify-center">
+            <div className="rounded-xl bg-surface-charcoal border border-border p-4 flex flex-col items-center justify-center text-center space-y-3 h-36">
+              <div className="w-10 h-10 rounded-full bg-surface-secondary border border-border text-soft-stone flex items-center justify-center">
                 <Radio className="w-5 h-5 animate-pulse" />
               </div>
               <div className="space-y-0.5">
-                <div className="text-xs font-semibold text-on-surface">
-                  Waiting for Sam to step in...
+                <div className="text-xs font-semibold text-text-primary">
+                  Waiting for Sam to step into lobby...
                 </div>
-                <div className="text-[10px] text-on-surface-variant max-w-xs">
-                  Sam will automatically connect when opening TogetherPlay in Tokyo.
+                <div className="text-[11px] text-text-muted max-w-xs">
+                  Sam will connect automatically upon opening TogetherPlay in Tokyo.
                 </div>
               </div>
 
               <div className="flex items-center gap-2 pt-1">
                 <Button
-                  variant="amber"
+                  variant="brand"
                   size="sm"
                   onClick={handleSendNudge}
                   className="text-xs"
@@ -431,7 +497,7 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
                   variant="ghost"
                   size="sm"
                   onClick={partnerJoins}
-                  className="text-xs font-mono"
+                  className="text-xs font-mono text-text-muted hover:text-text-primary"
                   title="Simulate Sam joining the lobby"
                 >
                   Simulate Join
@@ -439,49 +505,49 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
               </div>
             </div>
           ) : (
-            <div className="rounded-xl bg-surface-deep border border-subtle-border p-3 space-y-2.5">
-              <div className="flex items-center justify-between text-[11px] font-mono text-on-surface-variant">
+            <div className="rounded-xl bg-background border border-border p-3 space-y-2">
+              <div className="flex items-center justify-between text-xs font-mono text-text-muted">
                 <span className="flex items-center gap-1.5">
-                  <Video className="w-3.5 h-3.5 text-player-two-sage" />
+                  <Video className="w-3.5 h-3.5 text-brand" />
                   <span>Partner Video Feed</span>
                 </span>
-                <span className="text-[10px] text-player-two-sage">
-                  Connected & Ready
+                <span className="text-brand font-medium">
+                  Connected &amp; Ready
                 </span>
               </div>
 
               {/* Partner Camera Viewport */}
-              <div className="relative h-28 sm:h-32 rounded-lg bg-surface-base border border-subtle-border/70 overflow-hidden flex items-center justify-center">
-                <div className="absolute inset-0 bg-neutral-900/80 flex flex-col items-center justify-center p-3 text-center">
-                  <div className="w-10 h-10 rounded-full bg-player-two-sage/20 text-player-two-sage flex items-center justify-center mb-1">
-                    <Video className="w-5 h-5" />
+              <div className="relative h-28 rounded-lg bg-surface border border-border overflow-hidden flex items-center justify-center">
+                <div className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center p-3 text-center">
+                  <div className="w-9 h-9 rounded-full bg-brand/15 text-brand flex items-center justify-center mb-1">
+                    <Video className="w-4 h-4" />
                   </div>
-                  <span className="text-[11px] font-medium text-on-surface">
-                    Sam&apos;s Camera Stream
+                  <span className="text-xs font-medium text-text-primary">
+                    Sam&apos;s Feed
                   </span>
-                  <span className="text-[9px] font-mono text-on-surface-variant">
-                    720p HD · 30 FPS · Tokyo Studio
+                  <span className="text-[10px] font-mono text-text-muted">
+                    720p HD · Tokyo Studio
                   </span>
                 </div>
 
-                <div className="absolute bottom-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-deep/80 text-[10px] font-mono text-player-two-sage">
-                  <span className="w-1.5 h-1.5 rounded-full bg-player-two-sage animate-pulse" />
+                <div className="absolute bottom-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-background/80 text-[10px] font-mono text-brand">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
                   <span>Live Feed</span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Player B Ready Status & Action */}
+          {/* Player B Ready Status */}
           <div className="pt-1 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-xs font-mono">
               <span
                 className={`w-2.5 h-2.5 rounded-full ${
-                  playerB.isReady ? "bg-player-two-sage" : "bg-on-surface-variant/40"
+                  playerB.isReady ? "bg-brand animate-pulse" : "bg-text-muted/40"
                 }`}
               />
-              <span className="text-xs font-mono">
-                {playerB.isReady ? "Sam is Ready" : playerB.isInLobby ? "Sam is deciding..." : "Not in lobby"}
+              <span className={playerB.isReady ? "text-brand font-semibold" : "text-text-muted"}>
+                {playerB.isReady ? "Sam is Ready!" : playerB.isInLobby ? "Sam is deciding..." : "Not in lobby yet"}
               </span>
             </div>
 
@@ -491,8 +557,8 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
                 size="sm"
                 onClick={togglePlayerBReady}
                 disabled={lobbyState === "starting" || lobbyState === "disconnected"}
-                className="text-[11px] font-mono text-on-surface-variant hover:text-on-surface"
-                title="Toggle Sam's ready state for previewing"
+                className="text-xs font-mono text-text-muted hover:text-text-primary"
+                title="Toggle Sam's ready state"
               >
                 {playerB.isReady ? "Simulate Unready" : "Simulate Ready"}
               </Button>
@@ -501,99 +567,21 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
         </Card>
       </section>
 
-      {/* 5. Selected Game Showcase */}
-      <Card variant="raised" className="p-5 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-subtle-border pb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono uppercase tracking-wider text-shared-amber font-semibold">
-              Selected Experience
-            </span>
-            <Badge variant="amber">{selectedGame.badgeLabel}</Badge>
-          </div>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsCatalogOpen(true)}
-            className="text-xs font-mono text-on-surface-variant hover:text-on-surface self-start sm:self-auto"
-          >
-            <Layers className="w-3.5 h-3.5 mr-1.5" />
-            Switch Game
-          </Button>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-baseline justify-between flex-wrap gap-2">
-            <h2 className="text-xl sm:text-2xl font-semibold text-on-surface">
-              {selectedGame.title}
-            </h2>
-            <span className="text-xs font-mono text-on-surface-variant">
-              {selectedGame.subtitle}
-            </span>
-          </div>
-
-          <p className="text-xs sm:text-sm text-on-surface-variant leading-relaxed">
-            {selectedGame.description}
-          </p>
-        </div>
-
-        {/* Game Secondary Metadata (Duration, Video Availability, Playstyle) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
-          <div className="p-2.5 rounded-lg bg-surface-deep border border-subtle-border space-y-0.5">
-            <div className="flex items-center gap-1.5 text-[10px] font-mono text-on-surface-variant">
-              <Clock className="w-3 h-3 text-shared-amber" />
-              <span>Duration</span>
-            </div>
-            <div className="font-semibold text-on-surface">{selectedGame.duration}</div>
-          </div>
-
-          <div className="p-2.5 rounded-lg bg-surface-deep border border-subtle-border space-y-0.5">
-            <div className="flex items-center gap-1.5 text-[10px] font-mono text-on-surface-variant">
-              <Video className="w-3 h-3 text-player-two-sage" />
-              <span>Video Support</span>
-            </div>
-            <div className="font-semibold text-on-surface truncate">
-              {selectedGame.videoSupport}
-            </div>
-          </div>
-
-          <div className="p-2.5 rounded-lg bg-surface-deep border border-subtle-border space-y-0.5">
-            <div className="flex items-center gap-1.5 text-[10px] font-mono text-on-surface-variant">
-              <Heart className="w-3 h-3 text-player-one-ember" />
-              <span>Playstyle</span>
-            </div>
-            <div className="font-semibold text-on-surface truncate">
-              {selectedGame.playStyle}
-            </div>
-          </div>
-
-          <div className="p-2.5 rounded-lg bg-surface-deep border border-subtle-border space-y-0.5">
-            <div className="flex items-center gap-1.5 text-[10px] font-mono text-on-surface-variant">
-              <Sparkles className="w-3 h-3 text-shared-amber" />
-              <span>Difficulty</span>
-            </div>
-            <div className="font-semibold text-on-surface truncate">
-              {selectedGame.difficulty}
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* 6. Flow Status & Active Launch Panel */}
+      {/* 6. Active Launch Flow & Countdown */}
       {lobbyState === "starting" && (
         <Card
           variant="raised"
-          className="p-8 text-center space-y-4 border-shared-amber/60 bg-shared-amber/5 animate-in fade-in"
+          className="p-8 text-center space-y-4 border-brand/60 bg-brand/5 animate-in fade-in"
         >
-          <div className="w-16 h-16 rounded-full bg-shared-amber/15 text-shared-amber flex items-center justify-center mx-auto text-2xl font-mono font-bold animate-pulse">
+          <div className="w-16 h-16 rounded-full bg-brand/20 text-brand flex items-center justify-center mx-auto text-3xl font-mono font-bold font-tabular animate-pulse">
             {countdown}
           </div>
           <div className="space-y-1">
-            <h3 className="text-lg font-semibold text-on-surface">
+            <h3 className="font-display text-xl text-text-primary">
               Synchronizing with Tokyo...
             </h3>
-            <p className="text-xs text-on-surface-variant max-w-sm mx-auto">
-              Both partners are ready. Commencing {selectedGame.title}.
+            <p className="text-xs text-text-secondary max-w-sm mx-auto">
+              Both partners confirmed. Commencing {selectedGame.title}.
             </p>
           </div>
         </Card>
@@ -602,44 +590,44 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
       {lobbyState === "game" && (
         <Card
           variant="raised"
-          className="p-6 text-center space-y-4 border-player-two-sage/60 bg-player-two-sage/5 animate-in fade-in"
+          className="p-6 text-center space-y-4 border-brand/60 bg-brand/5 animate-in fade-in"
         >
-          <div className="w-12 h-12 rounded-full bg-player-two-sage/20 text-player-two-sage flex items-center justify-center mx-auto">
+          <div className="w-12 h-12 rounded-full bg-brand/20 text-brand flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-6 h-6" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-lg font-semibold text-on-surface">
+            <h3 className="font-display text-xl text-text-primary">
               Session Synchronized!
             </h3>
-            <p className="text-xs text-on-surface-variant max-w-sm mx-auto">
+            <p className="text-xs text-text-secondary max-w-sm mx-auto">
               You and Sam are primed for {selectedGame.title}.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             {selectedGame.id === "find_it_first" ? (
               <Link href="/play/find-it-first">
-                <Button variant="amber" size="md">
+                <Button variant="brand" size="md">
                   <Play className="w-4 h-4 mr-2 fill-current" />
                   Enter Active Arena
                 </Button>
               </Link>
             ) : selectedGame.id === "speed_duel" ? (
               <Link href="/play/speed-duel">
-                <Button variant="amber" size="md">
+                <Button variant="brand" size="md">
                   <Play className="w-4 h-4 mr-2 fill-current" />
                   Enter Speed Duel Arena
                 </Button>
               </Link>
             ) : selectedGame.id === "couple_race" ? (
               <Link href="/play/couple-race">
-                <Button variant="amber" size="md">
+                <Button variant="brand" size="md">
                   <Play className="w-4 h-4 mr-2 fill-current" />
                   Enter Meridian Tabletop
                 </Button>
               </Link>
             ) : (
               <Button
-                variant="amber"
+                variant="brand"
                 size="md"
                 onClick={() =>
                   showToast({
@@ -662,22 +650,22 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
 
       {lobbyState !== "starting" && lobbyState !== "game" && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-          <div className="flex items-center gap-2 text-xs text-on-surface-variant">
-            <HelpCircle className="w-4 h-4 text-shared-amber shrink-0" />
+          <div className="flex items-center gap-2 text-xs text-text-muted">
+            <Sparkles className="w-4 h-4 text-brand shrink-0" />
             <span>
-              {playerA.isReady && playerB.isReady
-                ? "Both partners are ready! Launching countdown..."
+              {bothReady
+                ? "Both partners confirmed! Initiating synchrony countdown..."
                 : playerA.isReady
                 ? "You're marked ready. Waiting for Sam to confirm..."
                 : playerB.isReady
                 ? "Sam is ready in Tokyo! Tap 'I'm Ready' to begin."
-                : "Both partners must tap Ready to initiate the countdown."}
+                : "Both partners tap 'I'm Ready' to start the duel."}
             </span>
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={handleCopyLink}
               className="flex-1 sm:flex-initial text-xs"
@@ -689,14 +677,14 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={triggerDisconnect}
-                className="text-xs text-player-one-ember hover:bg-player-one-ember/10"
+                className="text-xs text-text-muted hover:text-danger"
                 title="Test disconnect state"
               >
                 Simulate Disconnect
               </Button>
             ) : (
               <Button
-                variant="amber"
+                variant="brand"
                 size="sm"
                 onClick={triggerReconnect}
                 className="text-xs"
@@ -708,15 +696,15 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
         </div>
       )}
 
-      {/* 7. Game Switcher Modal */}
+      {/* 7. Game Switcher Modal (Intimate Modal Selector) */}
       {isCatalogOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-md flex items-center justify-center p-4">
           <Card
             variant="raised"
-            className="w-full max-w-lg p-5 space-y-4 max-h-[85vh] overflow-y-auto"
+            className="w-full max-w-lg p-5 space-y-4 max-h-[85vh] overflow-y-auto border border-border"
           >
-            <div className="flex items-center justify-between border-b border-subtle-border pb-3">
-              <h3 className="text-base font-semibold text-on-surface">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h3 className="font-display text-base text-text-primary">
                 Choose Tonight&apos;s Experience
               </h3>
               <Button
@@ -740,27 +728,27 @@ export const MultiplayerGameLobby: React.FC<MultiplayerGameLobbyProps> = ({
                       variant: "info",
                     });
                   }}
-                  className={`w-full text-left p-3 rounded-xl border transition-all flex items-start justify-between gap-3 ${
+                  className={`w-full text-left p-3.5 rounded-xl border transition-all flex items-start justify-between gap-3 cursor-pointer ${
                     selectedGame.id === game.id
-                      ? "bg-surface-raised border-shared-amber"
-                      : "bg-surface-deep border-subtle-border hover:border-on-surface-variant/40"
+                      ? "bg-surface-raised border-brand shadow-sm"
+                      : "bg-surface border-border hover:border-brand/40"
                   }`}
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-on-surface">
+                      <span className="text-xs font-semibold text-text-primary">
                         {game.title}
                       </span>
-                      <Badge variant="amber" size="sm">
+                      <span className="text-[10px] font-mono text-brand font-tabular">
                         {game.duration}
-                      </Badge>
+                      </span>
                     </div>
-                    <p className="text-[11px] text-on-surface-variant line-clamp-2">
+                    <p className="text-[11px] text-text-secondary line-clamp-2">
                       {game.description}
                     </p>
                   </div>
                   {selectedGame.id === game.id && (
-                    <CheckCircle2 className="w-4 h-4 text-shared-amber shrink-0 mt-1" />
+                    <CheckCircle2 className="w-4 h-4 text-brand shrink-0 mt-1" />
                   )}
                 </button>
               ))}

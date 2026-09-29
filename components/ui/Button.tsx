@@ -8,12 +8,16 @@ export interface ButtonProps
   extends Omit<HTMLMotionProps<"button">, "ref" | "children"> {
   children?: React.ReactNode;
   variant?:
+    | "brand"
+    | "mint"
     | "amber"
     | "ember"
     | "sage"
     | "surface"
     | "outline"
-    | "ghost";
+    | "ghost"
+    | "game_action"
+    | "danger";
   size?: "sm" | "md" | "lg";
   isLoading?: boolean;
 }
@@ -22,7 +26,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
     {
       className,
-      variant = "amber",
+      variant = "brand",
       size = "md",
       isLoading = false,
       disabled,
@@ -32,36 +36,43 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      "inline-flex items-center justify-center font-medium tracking-tight rounded-lg select-none disabled:opacity-50 disabled:pointer-events-none transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shared-amber/50";
+      "inline-flex items-center justify-center font-medium tracking-tight select-none disabled:opacity-40 disabled:pointer-events-none transition-all duration-150 cursor-pointer focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-2";
 
     const sizeStyles = {
-      sm: "h-8 px-3 text-xs gap-1.5",
-      md: "h-10 px-4 py-2 text-sm gap-2",
-      lg: "h-12 px-6 py-3 text-base gap-2.5",
+      sm: "h-9 px-3.5 text-xs gap-1.5 rounded-lg",
+      md: "h-11 px-5 py-2.5 text-sm gap-2 rounded-xl",
+      lg: "h-12 px-7 py-3 text-base gap-2.5 rounded-xl font-semibold",
     }[size];
 
     const variantStyles = {
+      brand:
+        "bg-brand hover:bg-brand-hover text-text-on-mint font-semibold shadow-elevation-sm hover:shadow-mint-glow active:scale-[0.98] border border-brand-hover/40",
+      mint:
+        "bg-brand hover:bg-brand-hover text-text-on-mint font-semibold shadow-elevation-sm hover:shadow-mint-glow active:scale-[0.98] border border-brand-hover/40",
       amber:
-        "bg-shared-amber hover:bg-shared-amber-hover text-surface-deep font-semibold shadow-md border border-border-amber/40",
+        "bg-warning/20 hover:bg-warning/30 text-warning font-semibold shadow-elevation-sm border border-warning/40 active:scale-[0.98]",
       ember:
-        "bg-player-one-ember hover:bg-player-one-ember-hover text-canvas-cream font-semibold shadow-md border border-border-ember/40",
+        "bg-player-one-ember/20 hover:bg-player-one-ember/30 text-player-one-ember font-semibold shadow-elevation-sm border border-player-one-ember/40 active:scale-[0.98]",
       sage:
-        "bg-player-two-sage hover:bg-player-two-sage-hover text-canvas-cream font-semibold shadow-md border border-border-sage/40",
+        "bg-player-two-sage/20 hover:bg-player-two-sage/30 text-player-two-sage font-semibold shadow-elevation-sm border border-player-two-sage/40 active:scale-[0.98]",
+      game_action:
+        "bg-brand hover:bg-brand-hover text-text-on-mint font-bold tracking-normal uppercase text-xs shadow-elevation-md hover:shadow-mint-intense border-t border-brand-hover border-b-2 border-brand-active active:translate-y-0.5",
       surface:
-        "bg-surface-raised hover:bg-surface-overlay text-on-surface border border-subtle-border shadow-sm",
+        "bg-surface-secondary hover:bg-surface-interactive text-warm-cream border border-border hover:border-border-strong shadow-elevation-sm active:scale-[0.98]",
       outline:
-        "border border-accent-border hover:bg-surface-raised text-on-surface",
+        "border border-border hover:border-border-strong hover:bg-surface-secondary text-warm-cream active:scale-[0.98]",
       ghost:
-        "hover:bg-surface-raised/60 text-on-surface-variant hover:text-on-surface",
+        "hover:bg-surface-secondary text-soft-stone hover:text-warm-cream active:scale-[0.98]",
+      danger:
+        "bg-danger/20 hover:bg-danger/30 text-danger border border-danger/40 active:scale-[0.98]",
     }[variant];
 
     return (
       <motion.button
         ref={ref}
         disabled={disabled || isLoading}
-        whileTap={{ scale: disabled || isLoading ? 1 : 0.97 }}
-        whileHover={{ scale: disabled || isLoading ? 1 : 1.01 }}
-        transition={{ type: "spring", stiffness: 450, damping: 25 }}
+        whileTap={{ scale: disabled || isLoading ? 1 : 0.98 }}
+        transition={{ type: "spring", stiffness: 500, damping: 30 }}
         className={cn(baseStyles, sizeStyles, variantStyles, className)}
         {...props}
       >

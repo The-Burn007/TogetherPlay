@@ -13,12 +13,10 @@ import {
   Trophy,
   CalendarHeart,
   FileText,
-  Upload,
   Image as ImageIcon,
   Loader2,
   CheckCircle2,
   AlertCircle,
-  Sparkles,
 } from "lucide-react";
 
 interface MemoryUploadModalProps {
@@ -165,7 +163,7 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
   return (
     <div
       id="memory-upload-modal-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface-deep/80 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background-canvas/80 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <div
@@ -173,18 +171,18 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="memory-upload-title"
-        className="relative w-full max-w-lg max-h-[92vh] overflow-y-auto bg-surface-raised border border-subtle-border rounded-2xl p-5 sm:p-6 shadow-2xl space-y-5"
+        className="relative w-full max-w-lg max-h-[92vh] overflow-y-auto bg-surface border border-border rounded-2xl p-5 sm:p-6 shadow-elevation-lg space-y-5"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-subtle-border pb-3">
+        <div className="flex items-center justify-between border-b border-border pb-3">
           <div>
-            <span className="text-[10px] font-mono uppercase tracking-widest text-shared-amber font-semibold">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-brand font-semibold">
               Private Couple Archive
             </span>
             <h2
               id="memory-upload-title"
-              className="text-xl font-semibold text-on-surface tracking-tight"
+              className="text-xl font-display font-medium text-text-primary tracking-tight"
             >
               Preserve a Memory
             </h2>
@@ -192,7 +190,7 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
           <button
             onClick={onClose}
             disabled={isSubmitting}
-            className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-deep transition-colors"
+            className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-raised transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -200,7 +198,7 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
 
         {/* Error Notification */}
         {errorMessage && (
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-player-one-ember/15 border border-player-one-ember/30 text-player-one-ember text-xs font-mono">
+          <div className="flex items-center gap-2 p-3.5 rounded-xl bg-danger/10 border border-danger/30 text-danger text-xs font-mono">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{errorMessage}</span>
           </div>
@@ -209,17 +207,17 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Category Selector Tabs */}
           <div className="space-y-1.5">
-            <label className="text-xs font-mono text-on-surface-variant">
+            <label className="text-xs font-mono text-text-muted">
               Memory Category
             </label>
-            <div className="grid grid-cols-5 gap-1.5 bg-surface-deep p-1 rounded-xl border border-subtle-border">
+            <div className="grid grid-cols-5 gap-1.5 bg-background-canvas p-1 rounded-xl border border-border">
               <button
                 type="button"
                 onClick={() => setCategory("photo")}
-                className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-[10px] font-mono transition-all ${
+                className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-[10px] font-mono transition-all cursor-pointer ${
                   category === "photo"
                     ? "bg-surface-raised text-player-one-ember font-bold shadow-sm"
-                    : "text-on-surface-variant hover:text-on-surface"
+                    : "text-text-muted hover:text-text-primary"
                 }`}
               >
                 <Camera className="w-3.5 h-3.5" />
@@ -228,10 +226,10 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
               <button
                 type="button"
                 onClick={() => setCategory("game_moment")}
-                className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-[10px] font-mono transition-all ${
+                className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-[10px] font-mono transition-all cursor-pointer ${
                   category === "game_moment"
-                    ? "bg-surface-raised text-shared-amber font-bold shadow-sm"
-                    : "text-on-surface-variant hover:text-on-surface"
+                    ? "bg-surface-raised text-brand font-bold shadow-sm"
+                    : "text-text-muted hover:text-text-primary"
                 }`}
               >
                 <Gamepad2 className="w-3.5 h-3.5" />
@@ -240,10 +238,10 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
               <button
                 type="button"
                 onClick={() => setCategory("milestone")}
-                className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-[10px] font-mono transition-all ${
+                className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-[10px] font-mono transition-all cursor-pointer ${
                   category === "milestone"
                     ? "bg-surface-raised text-player-two-sage font-bold shadow-sm"
-                    : "text-on-surface-variant hover:text-on-surface"
+                    : "text-text-muted hover:text-text-primary"
                 }`}
               >
                 <Trophy className="w-3.5 h-3.5" />
@@ -252,10 +250,10 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
               <button
                 type="button"
                 onClick={() => setCategory("relationship_date")}
-                className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-[10px] font-mono transition-all ${
+                className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-[10px] font-mono transition-all cursor-pointer ${
                   category === "relationship_date"
                     ? "bg-surface-raised text-player-one-ember font-bold shadow-sm"
-                    : "text-on-surface-variant hover:text-on-surface"
+                    : "text-text-muted hover:text-text-primary"
                 }`}
               >
                 <CalendarHeart className="w-3.5 h-3.5" />
@@ -264,10 +262,10 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
               <button
                 type="button"
                 onClick={() => setCategory("note")}
-                className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-[10px] font-mono transition-all ${
+                className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-[10px] font-mono transition-all cursor-pointer ${
                   category === "note"
-                    ? "bg-surface-raised text-on-surface font-bold shadow-sm"
-                    : "text-on-surface-variant hover:text-on-surface"
+                    ? "bg-surface-raised text-text-primary font-bold shadow-sm"
+                    : "text-text-muted hover:text-text-primary"
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
@@ -279,7 +277,7 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
           {/* Title & Date */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2 space-y-1">
-              <label htmlFor="memory-title-input" className="text-xs font-mono text-on-surface-variant">
+              <label htmlFor="memory-title-input" className="text-xs font-mono text-text-muted">
                 Title *
               </label>
               <input
@@ -298,13 +296,13 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                     ? "e.g., Tokyo Autumn Reunion Planning"
                     : "e.g., Midnight Letter on the Train"
                 }
-                className="w-full bg-surface-deep border border-subtle-border rounded-xl px-3 py-2 text-xs text-on-surface focus:outline-none focus:border-shared-amber"
+                className="w-full bg-background-canvas border border-border rounded-xl px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
                 required
               />
             </div>
 
             <div className="space-y-1">
-              <label htmlFor="memory-date-input" className="text-xs font-mono text-on-surface-variant">
+              <label htmlFor="memory-date-input" className="text-xs font-mono text-text-muted">
                 Date *
               </label>
               <input
@@ -312,7 +310,7 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full bg-surface-deep border border-subtle-border rounded-xl px-3 py-2 text-xs text-on-surface focus:outline-none focus:border-shared-amber"
+                className="w-full bg-background-canvas border border-border rounded-xl px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
                 required
               />
             </div>
@@ -320,9 +318,9 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
 
           {/* Intimate Context */}
           <div className="space-y-1">
-            <label htmlFor="memory-context-input" className="text-xs font-mono text-on-surface-variant flex items-center justify-between">
+            <label htmlFor="memory-context-input" className="text-xs font-mono text-text-muted flex items-center justify-between">
               <span>Intimate Context &amp; Backstory *</span>
-              <span className="text-[10px] text-on-surface-muted">Location / Setting</span>
+              <span className="text-[10px] text-text-muted">Location / Setting</span>
             </label>
             <textarea
               id="memory-context-input"
@@ -330,7 +328,7 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
               onChange={(e) => setContext(e.target.value)}
               placeholder="Where were you both? What was the weather, room atmosphere, or backstory behind this moment?"
               rows={2}
-              className="w-full bg-surface-deep border border-subtle-border rounded-xl px-3 py-2 text-xs text-on-surface focus:outline-none focus:border-shared-amber resize-none"
+              className="w-full bg-background-canvas border border-border rounded-xl px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand resize-none"
               required
             />
           </div>
@@ -339,9 +337,9 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
           {/* 1. PHOTO UPLOAD SECTION */}
           {category === "photo" && (
             <div className="space-y-2">
-              <label className="text-xs font-mono text-on-surface-variant flex items-center justify-between">
+              <label className="text-xs font-mono text-text-muted flex items-center justify-between">
                 <span>Private Photo</span>
-                <span className="text-[10px] text-on-surface-muted">
+                <span className="text-[10px] text-text-muted">
                   Stored securely under couples/{`{coupleId}`}/memories/
                 </span>
               </label>
@@ -356,8 +354,8 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                 onClick={() => fileInputRef.current?.click()}
                 className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center space-y-2 ${
                   isDragging
-                    ? "border-shared-amber bg-shared-amber/5"
-                    : "border-subtle-border hover:border-shared-amber/50 bg-surface-deep/50"
+                    ? "border-brand bg-brand/5"
+                    : "border-border hover:border-brand/50 bg-background-canvas/50"
                 }`}
               >
                 <input
@@ -373,29 +371,29 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                 />
 
                 {mediaPreviewUrl ? (
-                  <div className="relative w-full max-h-48 rounded-lg overflow-hidden border border-subtle-border">
+                  <div className="relative w-full max-h-48 rounded-lg overflow-hidden border border-border">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={mediaPreviewUrl}
                       alt="Preview"
                       className="w-full h-48 object-cover"
                     />
-                    <div className="absolute inset-0 bg-surface-deep/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <span className="text-xs font-mono text-canvas-cream bg-surface-deep/80 px-2 py-1 rounded">
+                    <div className="absolute inset-0 bg-background-canvas/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="text-xs font-mono text-text-primary bg-surface/90 px-2 py-1 rounded">
                         Click or drag to replace
                       </span>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
-                      <ImageIcon className="w-5 h-5 text-shared-amber" />
+                    <div className="w-10 h-10 rounded-full bg-surface-raised flex items-center justify-center text-brand">
+                      <ImageIcon className="w-5 h-5 text-brand" />
                     </div>
                     <div className="space-y-0.5">
-                      <p className="text-xs text-on-surface font-medium">
+                      <p className="text-xs text-text-primary font-medium">
                         Drag &amp; drop your private photo, or click to browse
                       </p>
-                      <p className="text-[10px] font-mono text-on-surface-muted">
+                      <p className="text-[10px] font-mono text-text-muted">
                         Zero public URLs · Ephemeral streaming
                       </p>
                     </div>
@@ -405,7 +403,7 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
 
               {mediaFile && (
                 <div className="space-y-1">
-                  <label htmlFor="media-caption-input" className="text-[11px] font-mono text-on-surface-variant">
+                  <label htmlFor="media-caption-input" className="text-[11px] font-mono text-text-muted">
                     Photo Caption (optional)
                   </label>
                   <input
@@ -414,7 +412,7 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                     value={mediaCaption}
                     onChange={(e) => setMediaCaption(e.target.value)}
                     placeholder="e.g., The golden light reflecting on the kitchen counter."
-                    className="w-full bg-surface-deep border border-subtle-border rounded-xl px-3 py-1.5 text-xs text-on-surface focus:outline-none focus:border-shared-amber"
+                    className="w-full bg-background-canvas border border-border rounded-xl px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
                   />
                 </div>
               )}
@@ -423,16 +421,16 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
 
           {/* 2. GAME MOMENT SECTION */}
           {category === "game_moment" && (
-            <div className="bg-surface-deep border border-subtle-border rounded-xl p-3.5 space-y-3">
+            <div className="bg-background-canvas border border-border rounded-xl p-3.5 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-mono text-on-surface-variant">
+                  <label className="text-[11px] font-mono text-text-muted">
                     Game / Activity
                   </label>
                   <select
                     value={gameType}
                     onChange={(e) => setGameType(e.target.value as MemoryGameType)}
-                    className="w-full bg-surface-raised border border-subtle-border rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-shared-amber"
+                    className="w-full bg-surface-raised border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
                   >
                     <option value="speed_duel">Speed Duel: Reflex Matrix</option>
                     <option value="find_it_first">Find It First: Sensory Hunt</option>
@@ -445,7 +443,7 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-mono text-on-surface-variant">
+                  <label className="text-[11px] font-mono text-text-muted">
                     Winner (optional)
                   </label>
                   <input
@@ -453,14 +451,14 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                     value={gameWinnerName}
                     onChange={(e) => setGameWinnerName(e.target.value)}
                     placeholder="e.g., Sam or Tie"
-                    className="w-full bg-surface-raised border border-subtle-border rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-shared-amber"
+                    className="w-full bg-surface-raised border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-mono text-on-surface-variant">
+                  <label className="text-[11px] font-mono text-text-muted">
                     Score / Metric
                   </label>
                   <input
@@ -468,12 +466,12 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                     value={gameScoreMetric}
                     onChange={(e) => setGameScoreMetric(e.target.value)}
                     placeholder="e.g., 230ms reaction or 98% synchrony"
-                    className="w-full bg-surface-raised border border-subtle-border rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-shared-amber"
+                    className="w-full bg-surface-raised border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-mono text-on-surface-variant">
+                  <label className="text-[11px] font-mono text-text-muted">
                     Outcome Summary
                   </label>
                   <input
@@ -481,7 +479,7 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                     value={gameResultSummary}
                     onChange={(e) => setGameResultSummary(e.target.value)}
                     placeholder="e.g., Decided on the 5th final round tiebreak"
-                    className="w-full bg-surface-raised border border-subtle-border rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-shared-amber"
+                    className="w-full bg-surface-raised border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
@@ -490,16 +488,16 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
 
           {/* 3. MILESTONE SECTION */}
           {category === "milestone" && (
-            <div className="bg-surface-deep border border-subtle-border rounded-xl p-3.5 space-y-3">
+            <div className="bg-background-canvas border border-border rounded-xl p-3.5 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-mono text-on-surface-variant">
+                  <label className="text-[11px] font-mono text-text-muted">
                     Milestone Type
                   </label>
                   <select
                     value={milestoneType}
                     onChange={(e) => setMilestoneType(e.target.value as any)}
-                    className="w-full bg-surface-raised border border-subtle-border rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-shared-amber"
+                    className="w-full bg-surface-raised border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
                   >
                     <option value="streak">Ritual Streak</option>
                     <option value="distance">Distance Bridged</option>
@@ -510,7 +508,7 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-mono text-on-surface-variant">
+                  <label className="text-[11px] font-mono text-text-muted">
                     Badge Title
                   </label>
                   <input
@@ -518,14 +516,14 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                     value={badgeTitle}
                     onChange={(e) => setBadgeTitle(e.target.value)}
                     placeholder="e.g., Meridian Keepers"
-                    className="w-full bg-surface-raised border border-subtle-border rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-shared-amber"
+                    className="w-full bg-surface-raised border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-mono text-on-surface-variant">
+                  <label className="text-[11px] font-mono text-text-muted">
                     Metric Label
                   </label>
                   <input
@@ -533,12 +531,12 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                     value={metricLabel}
                     onChange={(e) => setMetricLabel(e.target.value)}
                     placeholder="e.g., Active Streak"
-                    className="w-full bg-surface-raised border border-subtle-border rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-shared-amber"
+                    className="w-full bg-surface-raised border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-mono text-on-surface-variant">
+                  <label className="text-[11px] font-mono text-text-muted">
                     Metric Value
                   </label>
                   <input
@@ -546,7 +544,7 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                     value={metricValue}
                     onChange={(e) => setMetricValue(e.target.value)}
                     placeholder="e.g., 50 Consecutive Days"
-                    className="w-full bg-surface-raised border border-subtle-border rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-shared-amber"
+                    className="w-full bg-surface-raised border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
@@ -555,10 +553,10 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
 
           {/* 4. RELATIONSHIP DATE SECTION */}
           {category === "relationship_date" && (
-            <div className="bg-surface-deep border border-subtle-border rounded-xl p-3.5 space-y-3">
+            <div className="bg-background-canvas border border-border rounded-xl p-3.5 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-mono text-on-surface-variant">
+                  <label className="text-[11px] font-mono text-text-muted">
                     Location / Destination
                   </label>
                   <input
@@ -566,12 +564,12 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     placeholder="e.g., Shinjuku Gyoen or London Bridge"
-                    className="w-full bg-surface-raised border border-subtle-border rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-shared-amber"
+                    className="w-full bg-surface-raised border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-mono text-on-surface-variant">
+                  <label className="text-[11px] font-mono text-text-muted">
                     Anniversary Year (optional)
                   </label>
                   <input
@@ -581,7 +579,7 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
                     value={anniversaryYear || ""}
                     onChange={(e) => setAnniversaryYear(e.target.value ? Number(e.target.value) : undefined)}
                     placeholder="e.g., 2"
-                    className="w-full bg-surface-raised border border-subtle-border rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-shared-amber"
+                    className="w-full bg-surface-raised border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
@@ -590,9 +588,9 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
 
           {/* Detailed Reflections / Notes / Whispers */}
           <div className="space-y-1">
-            <label htmlFor="memory-note-input" className="text-xs font-mono text-on-surface-variant flex items-center justify-between">
+            <label htmlFor="memory-note-input" className="text-xs font-mono text-text-muted flex items-center justify-between">
               <span>{category === "note" ? "Letter / Whispered Note *" : "Personal Reflection / Notes (optional)"}</span>
-              <span className="text-[10px] text-on-surface-muted">Private to couple</span>
+              <span className="text-[10px] text-text-muted">Private to couple</span>
             </label>
             <textarea
               id="memory-note-input"
@@ -600,18 +598,18 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
               onChange={(e) => setNote(e.target.value)}
               placeholder="Write a letter, a whispered thought, or what this memory feels like..."
               rows={category === "note" ? 4 : 2}
-              className="w-full bg-surface-deep border border-subtle-border rounded-xl px-3 py-2 text-xs text-on-surface focus:outline-none focus:border-shared-amber resize-none font-serif leading-relaxed"
+              className="w-full bg-background-canvas border border-border rounded-xl px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand resize-none font-display leading-relaxed"
               required={category === "note"}
             />
           </div>
 
           {/* Submit Action */}
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-subtle-border">
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 rounded-xl text-xs font-mono bg-surface-deep border border-subtle-border text-on-surface hover:bg-surface-container transition-colors"
+              className="px-4 py-2 rounded-xl text-xs font-mono bg-surface-raised border border-border text-text-primary hover:bg-surface-overlay transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -619,7 +617,7 @@ export const MemoryUploadModal: React.FC<MemoryUploadModalProps> = ({
               id="submit-memory-btn"
               type="submit"
               disabled={isSubmitting}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-mono bg-shared-amber text-surface-deep font-semibold hover:brightness-105 disabled:opacity-50 transition-all shadow-sm"
+              className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-mono bg-brand hover:bg-brand-hover text-text-on-mint font-semibold disabled:opacity-50 transition-all shadow-sm cursor-pointer"
             >
               {isSubmitting ? (
                 <>

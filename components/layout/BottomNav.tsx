@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Home, Gamepad2, BookOpen, Camera, User } from "lucide-react";
+import { motion } from "motion/react";
 
 export const BottomNav: React.FC = () => {
   const pathname = usePathname();
@@ -12,7 +13,7 @@ export const BottomNav: React.FC = () => {
   const navItems = [
     {
       id: "nav-home",
-      label: "Home",
+      label: "Sanctuary",
       href: "/home",
       icon: Home,
       isActive: pathname === "/" || pathname === "/home",
@@ -26,7 +27,7 @@ export const BottomNav: React.FC = () => {
     },
     {
       id: "nav-memories",
-      label: "Memories",
+      label: "History",
       href: "/memories",
       icon: BookOpen,
       isActive: pathname.startsWith("/memories"),
@@ -49,10 +50,10 @@ export const BottomNav: React.FC = () => {
 
   return (
     <nav
-      className="md:hidden fixed bottom-3 inset-x-0 z-40 px-3 flex justify-center pb-safe pointer-events-none"
-      aria-label="Mobile Navigation"
+      className="md:hidden fixed bottom-4 inset-x-4 z-40"
+      aria-label="Sanctuary Mobile Navigation"
     >
-      <div className="pointer-events-auto w-full max-w-sm h-14 rounded-full bg-surface-raised/95 backdrop-blur-xl border border-subtle-border shadow-[0_6px_28px_rgba(0,0,0,0.65)] px-1.5 flex items-center justify-around">
+      <div className="w-full max-w-md mx-auto h-16 rounded-2xl bg-surface-charcoal/95 border border-border-strong/40 backdrop-blur-2xl shadow-elevation-lg px-2 flex items-center justify-around">
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
@@ -60,16 +61,45 @@ export const BottomNav: React.FC = () => {
               key={item.id}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center w-14 h-11 rounded-full transition-all gap-0.5 select-none",
+                "relative tp-touch-target flex flex-col items-center justify-center flex-1 h-12 rounded-xl transition-all select-none focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-1",
                 item.isActive
-                  ? "bg-surface-overlay text-shared-amber shadow-sm"
-                  : "text-on-surface-variant hover:text-on-surface"
+                  ? "text-warm-cream font-semibold"
+                  : "text-soft-sage hover:text-soft-stone active:scale-95"
               )}
+              aria-current={item.isActive ? "page" : undefined}
             >
-              <Icon className="w-4 h-4 shrink-0" />
-              <span className="text-[9px] font-mono tracking-wider uppercase">
+              {/* Subtle Warm Interactive Plinth for Active Tab */}
+              {item.isActive ? (
+                <motion.div
+                  layoutId="mobile-active-bg"
+                  className="absolute inset-0 bg-surface-interactive/70 border border-border rounded-xl -z-0"
+                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
+                />
+              ) : null}
+
+              <Icon
+                className={cn(
+                  "w-5 h-5 shrink-0 transition-transform z-10",
+                  item.isActive ? "text-warm-cream scale-105" : "text-soft-sage"
+                )}
+              />
+              <span
+                className={cn(
+                  "text-[10px] tracking-tight mt-0.5 z-10",
+                  item.isActive ? "text-warm-cream font-semibold" : "text-soft-sage"
+                )}
+              >
                 {item.label}
               </span>
+
+              {/* Controlled Acid Mint Indicator Dot */}
+              {item.isActive && (
+                <motion.span
+                  layoutId="mobile-active-dot"
+                  className="w-1 h-1 rounded-full bg-brand mt-0.5 z-10"
+                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
+                />
+              )}
             </Link>
           );
         })}

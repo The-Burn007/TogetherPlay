@@ -205,19 +205,19 @@ export const TabletopBoard: React.FC<TabletopBoardProps> = ({
         >
           {/* Tabletop Wood / Slate Outer Plinth */}
           <div
-            className="absolute inset-0 rounded-3xl border-2 border-stone-800 pointer-events-none"
+            className="absolute inset-0 rounded-3xl border-2 border-border pointer-events-none"
             style={{
-              background: "radial-gradient(ellipse at 50% 30%, #1f1d1a 0%, #131211 75%, #0d0c0b 100%)",
+              background: "radial-gradient(ellipse at 50% 30%, #18251D 0%, #111A14 75%, #0D140F 100%)",
               boxShadow: `
-                inset 0 1px 2px rgba(255,255,255,0.08),
+                inset 0 1px 2px rgba(183,255,114,0.08),
                 inset 0 -2px 6px rgba(0,0,0,0.8),
                 0 25px 50px -12px rgba(0,0,0,0.9)
               `,
             }}
           />
 
-          {/* Tabletop Subtle Brass Inlay Border */}
-          <div className="absolute inset-2.5 sm:inset-3.5 rounded-2xl border border-amber-500/20 pointer-events-none" />
+          {/* Tabletop Subtle Brass/Mint Inlay Border */}
+          <div className="absolute inset-2.5 sm:inset-3.5 rounded-2xl border border-brand/20 pointer-events-none" />
 
           {/* 8x6 Grid Matrix Track */}
           <div
@@ -247,10 +247,10 @@ export const TabletopBoard: React.FC<TabletopBoardProps> = ({
                   }}
                   className={`group relative rounded-xl sm:rounded-2xl transition-all duration-200 p-1 sm:p-2 flex flex-col justify-between cursor-pointer border ${
                     isSelected
-                      ? "ring-2 ring-amber-400 border-amber-300 bg-stone-800/90 shadow-lg"
+                      ? "ring-2 ring-brand border-brand bg-surface-raised shadow-mint-glow"
                       : isTurnActive
-                      ? "border-amber-400 bg-amber-950/40 shadow-[0_0_16px_rgba(245,158,11,0.35)] animate-pulse"
-                      : "border-stone-800/90 bg-[#171615] hover:border-stone-700 hover:bg-stone-800/60"
+                      ? "border-brand bg-brand/15 shadow-mint-glow animate-pulse"
+                      : "border-border bg-surface hover:border-brand/40 hover:bg-surface-raised"
                   }`}
                 >
                   {/* Subtle tile texture & bevel */}

@@ -29,7 +29,7 @@ export const GameFilterBar: React.FC<GameFilterBarProps> = ({
   return (
     <div
       id="game-filter-bar"
-      className="flex items-center gap-1.5 overflow-x-auto py-1.5 -mx-4 px-4 scrollbar-none"
+      className="flex items-center gap-1.5 overflow-x-auto py-1 -mx-4 px-4 scrollbar-none"
     >
       {filters.map((f) => {
         const isSelected = activeFilter === f.id;
@@ -41,23 +41,23 @@ export const GameFilterBar: React.FC<GameFilterBarProps> = ({
             id={`filter-btn-${f.id}`}
             onClick={() => onSelectFilter(f.id)}
             className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-mono transition-all shrink-0 flex items-center gap-1.5 border select-none",
+              "px-3 py-1.5 rounded-xl text-xs font-mono transition-all shrink-0 flex items-center gap-1.5 border select-none cursor-pointer focus-visible:outline-2 focus-visible:outline-brand",
               isSelected
-                ? "bg-surface-overlay text-shared-amber border-shared-amber/50 font-medium shadow-xs"
-                : "bg-surface-raised/60 text-on-surface-variant border-subtle-border/70 hover:text-on-surface hover:border-subtle-border hover:bg-surface-raised"
+                ? "bg-brand text-text-on-mint border-brand font-semibold shadow-sm"
+                : "bg-surface text-text-secondary border-border hover:text-text-primary hover:border-brand/40"
             )}
           >
             <span>{f.label}</span>
             {typeof count === "number" && (
               <span
                 className={cn(
-                  "text-[10px] px-1.5 py-0.2 rounded-full",
+                  "text-[10px] font-tabular",
                   isSelected
-                    ? "bg-shared-amber/20 text-shared-amber font-semibold"
-                    : "bg-surface-container text-on-surface-variant/80"
+                    ? "text-text-on-mint/80 font-bold"
+                    : "text-text-muted"
                 )}
               >
-                {count}
+                ({count})
               </span>
             )}
           </button>
@@ -66,4 +66,3 @@ export const GameFilterBar: React.FC<GameFilterBarProps> = ({
     </div>
   );
 };
-

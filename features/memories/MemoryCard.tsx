@@ -58,69 +58,69 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({
   return (
     <article className="relative flex flex-col space-y-3 pl-7 sm:pl-8 group">
       {/* Timeline Node Point */}
-      <div className="absolute left-1 top-1.5 w-4 h-4 rounded-full bg-surface-deep border border-subtle-border flex items-center justify-center -z-0">
+      <div className="absolute left-1 top-1.5 w-4 h-4 rounded-full bg-surface border border-border flex items-center justify-center -z-0">
         <div
           className={`w-2 h-2 rounded-full ${
             tagVariant === "ember"
               ? "bg-player-one-ember"
               : tagVariant === "sage"
               ? "bg-player-two-sage"
-              : "bg-shared-amber"
+              : "bg-brand"
           }`}
         />
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-mono text-on-surface-variant uppercase tracking-wider">
+        <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider font-tabular">
           {dateLabel}
         </span>
-        <Badge variant={tagVariant} size="sm">
+        <Badge variant={tagVariant === "amber" ? "brand" : tagVariant} size="sm">
           {tag}
         </Badge>
       </div>
 
-      <div className="bg-surface-raised border border-subtle-border rounded-xl p-4 sm:p-5 shadow-md flex flex-col space-y-3">
+      <div className="bg-surface border border-border hover:border-brand/40 rounded-2xl p-4 sm:p-5 shadow-elevation-sm transition-all flex flex-col space-y-3">
         <div className="flex flex-col space-y-1">
-          <h3 className="text-base font-semibold text-on-surface leading-snug">
+          <h3 className="text-base font-display font-medium text-text-primary leading-snug">
             {title}
           </h3>
-          <p className="text-xs text-on-surface-variant leading-relaxed">
+          <p className="text-xs text-text-secondary leading-relaxed">
             {description}
           </p>
         </div>
 
         {/* Dual Photo Comparison */}
         {playerOnePhotoUrl && playerTwoPhotoUrl ? (
-          <div className="grid grid-cols-2 gap-2 bg-surface-deep p-2 rounded-lg border border-subtle-border">
+          <div className="grid grid-cols-2 gap-2 bg-background-canvas p-2 rounded-xl border border-border-subtle">
             {/* Alex */}
             <div className="relative flex flex-col space-y-1.5">
-              <div className="relative h-36 sm:h-40 rounded-lg overflow-hidden bg-surface-container shadow-inner">
+              <div className="relative h-36 sm:h-40 rounded-lg overflow-hidden bg-surface-raised shadow-inner">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={playerOnePhotoUrl}
                   alt="Alex reaction"
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute top-2 left-2 bg-player-one-ember/90 backdrop-blur-md px-1.5 py-0.5 rounded font-mono text-[8px] uppercase tracking-widest text-canvas-cream font-bold">
+                <div className="absolute top-2 left-2 bg-background-canvas/90 backdrop-blur-md px-1.5 py-0.5 rounded font-mono text-[8px] uppercase tracking-widest text-player-one-ember font-bold border border-player-one-ember/30">
                   Alex
                 </div>
               </div>
               <div className="flex items-center justify-between px-1 text-[10px] font-mono">
-                <span className="text-on-surface-variant">{playerOneTimeLabel}</span>
+                <span className="text-text-muted">{playerOneTimeLabel}</span>
                 <span className="text-player-one-ember font-medium">{playerOneCity}</span>
               </div>
             </div>
 
             {/* Sam */}
             <div className="relative flex flex-col space-y-1.5">
-              <div className="relative h-36 sm:h-40 rounded-lg overflow-hidden bg-surface-container shadow-inner">
+              <div className="relative h-36 sm:h-40 rounded-lg overflow-hidden bg-surface-raised shadow-inner">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={playerTwoPhotoUrl}
                   alt="Sam reaction"
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute top-2 left-2 bg-player-two-sage/90 backdrop-blur-md px-1.5 py-0.5 rounded font-mono text-[8px] uppercase tracking-widest text-canvas-cream font-bold">
+                <div className="absolute top-2 left-2 bg-background-canvas/90 backdrop-blur-md px-1.5 py-0.5 rounded font-mono text-[8px] uppercase tracking-widest text-player-two-sage font-bold border border-player-two-sage/30">
                   Sam
                 </div>
               </div>
@@ -134,13 +134,13 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({
 
         {/* Highlight Stat Row */}
         {highlightStat ? (
-          <div className="flex items-center justify-between bg-surface-deep border border-subtle-border px-3 py-2 rounded-lg text-xs font-mono">
+          <div className="flex items-center justify-between bg-background-canvas border border-border-subtle px-3 py-2 rounded-xl text-xs font-mono">
             <div className="flex items-center gap-2">
-              <Zap className="w-3.5 h-3.5 text-player-two-sage" />
-              <span className="text-on-surface">{highlightStat}</span>
+              <Zap className="w-3.5 h-3.5 text-brand" />
+              <span className="text-text-primary">{highlightStat}</span>
             </div>
             {pts ? (
-              <span className="text-[10px] text-shared-amber bg-surface-raised px-2 py-0.5 rounded border border-subtle-border font-bold">
+              <span className="text-[10px] text-brand bg-surface-raised px-2 py-0.5 rounded border border-border font-bold font-tabular">
                 {pts}
               </span>
             ) : null}
@@ -151,12 +151,12 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({
         {audioNote ? (
           <div
             onClick={togglePlay}
-            className="flex items-center justify-between bg-surface-overlay border border-subtle-border px-3 py-2 rounded-lg cursor-pointer hover:bg-surface-container transition-colors"
+            className="flex items-center justify-between bg-background-canvas border border-border-subtle px-3.5 py-2.5 rounded-xl cursor-pointer hover:border-brand/40 transition-colors"
           >
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                className="w-7 h-7 rounded-full bg-player-one-ember text-canvas-cream flex items-center justify-center shadow-sm"
+                className="w-7 h-7 rounded-full bg-brand text-text-on-mint flex items-center justify-center shadow-sm"
                 aria-label="Play voice note"
               >
                 {isPlaying ? (
@@ -166,27 +166,27 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({
                 )}
               </button>
               <div className="flex flex-col">
-                <span className="text-xs font-semibold text-on-surface">
+                <span className="text-xs font-semibold text-text-primary">
                   {audioNote.title}
                 </span>
-                <span className="text-[10px] font-mono text-on-surface-variant">
+                <span className="text-[10px] font-mono text-text-muted">
                   Voice note by {audioNote.author} · {audioNote.duration}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <span className="w-1 h-3 bg-shared-amber/60 rounded-full animate-pulse" />
-              <span className="w-1 h-5 bg-shared-amber rounded-full" />
-              <span className="w-1 h-2 bg-shared-amber/40 rounded-full" />
-              <span className="w-1 h-4 bg-shared-amber/80 rounded-full" />
+              <span className="w-1 h-3 bg-brand/60 rounded-full animate-pulse" />
+              <span className="w-1 h-5 bg-brand rounded-full" />
+              <span className="w-1 h-2 bg-brand/40 rounded-full" />
+              <span className="w-1 h-4 bg-brand/80 rounded-full" />
             </div>
           </div>
         ) : null}
 
         {/* Quote Block */}
         {quote ? (
-          <div className="bg-surface-deep border border-subtle-border p-3 rounded-lg flex flex-col gap-1">
-            <p className="text-xs text-on-surface italic leading-relaxed">
+          <div className="bg-background-canvas border border-border-subtle p-3 rounded-xl flex flex-col gap-1">
+            <p className="text-xs text-text-secondary italic leading-relaxed font-display">
               &ldquo;{quote.text}&rdquo;
             </p>
             <span className="text-[9px] font-mono text-player-two-sage uppercase tracking-widest text-right">

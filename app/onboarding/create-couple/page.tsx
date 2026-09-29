@@ -3,21 +3,18 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { coupleService } from "@/lib/firebase/services/couple";
+import { motion } from "motion/react";
 import {
   Heart,
-  Calendar,
-  Sparkles,
   ArrowLeft,
   ArrowRight,
   ShieldCheck,
-  Flame,
 } from "lucide-react";
 
 export default function CreateCouplePage() {
@@ -42,7 +39,6 @@ export default function CreateCouplePage() {
 
     setIsLoading(true);
     try {
-      // Create couple space in Firestore with owner as initial member
       const newCouple = await coupleService.createCouple(
         user.uid,
         startDate ? startDate : undefined
@@ -53,7 +49,6 @@ export default function CreateCouplePage() {
         variant: "success",
       });
 
-      // Advance directly to step 3: invite partner & waiting state
       router.push(`/onboarding/invite?coupleId=${newCouple.coupleId}`);
     } catch (err: any) {
       console.error("Create couple error:", err);
@@ -66,41 +61,48 @@ export default function CreateCouplePage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6 max-w-lg mx-auto py-6 sm:py-10"
+    >
       {/* Navigation & Step Indicator */}
       <div className="flex items-center justify-between">
         <Link
           href="/onboarding"
-          className="inline-flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-on-surface transition-colors font-mono"
+          className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-text-primary transition-colors font-mono"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back</span>
         </Link>
-        <Badge variant="amber">Step 2 of 3</Badge>
+        <Badge variant="brand">Step 2 of 3</Badge>
       </div>
 
       {/* Header */}
-      <div className="space-y-2 text-center">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-surface-raised border border-shared-amber/30 text-shared-amber mx-auto shadow-sm">
+      <div className="space-y-3 text-center">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-surface border border-border text-brand mx-auto shadow-elevation-sm">
           <Heart className="w-6 h-6 fill-current" />
         </div>
-        <h1 className="text-2xl sm:text-3xl font-serif font-bold text-on-surface tracking-tight">
-          Dedicate Your Shared Space
-        </h1>
-        <p className="text-xs sm:text-sm text-on-surface-variant max-w-sm mx-auto leading-relaxed">
-          You are establishing the sacred room where only you and your partner
-          will connect, play, and remember.
-        </p>
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-display font-medium text-text-primary tracking-tight">
+            Dedicate Shared Space
+          </h1>
+          <p className="text-xs sm:text-sm text-text-secondary max-w-sm mx-auto leading-relaxed">
+            You are establishing the sacred room where only you and your partner
+            will connect, play, and remember.
+          </p>
+        </div>
       </div>
 
       {/* Form Card */}
-      <Card variant="raised" className="p-6">
+      <div className="bg-surface border border-border rounded-2xl p-6 sm:p-7 shadow-elevation-md">
         <form onSubmit={handleCreate} className="space-y-5">
           {/* Couple Nickname / Space Name */}
           <div className="space-y-1.5">
             <label
               htmlFor="coupleNickname"
-              className="block text-xs font-semibold text-on-surface tracking-wide uppercase font-mono"
+              className="block text-xs font-semibold text-text-primary tracking-wider uppercase font-mono"
             >
               Sanctuary Name (Optional)
             </label>
@@ -112,7 +114,7 @@ export default function CreateCouplePage() {
               className="text-sm"
               disabled={isLoading}
             />
-            <p className="text-[11px] text-on-surface-variant font-mono">
+            <p className="text-[11px] text-text-muted font-mono">
               A private title visible exclusively to you and your partner.
             </p>
           </div>
@@ -122,11 +124,11 @@ export default function CreateCouplePage() {
             <div className="flex items-center justify-between">
               <label
                 htmlFor="startDate"
-                className="block text-xs font-semibold text-on-surface tracking-wide uppercase font-mono"
+                className="block text-xs font-semibold text-text-primary tracking-wider uppercase font-mono"
               >
                 Relationship Milestone (Optional)
               </label>
-              <span className="text-[10px] text-shared-amber font-mono font-medium">
+              <span className="text-[10px] text-brand font-mono font-medium">
                 Anniversary Counter
               </span>
             </div>
@@ -140,29 +142,28 @@ export default function CreateCouplePage() {
                 disabled={isLoading}
               />
             </div>
-            <p className="text-[11px] text-on-surface-variant leading-relaxed">
+            <p className="text-[11px] text-text-muted leading-relaxed">
               When did your story start? We use this to celebrate daily milestones
               and days together across distance.
             </p>
           </div>
 
           {/* Security & Invariant Guarantee Notice */}
-          <div className="p-3.5 rounded-xl bg-surface-deep/60 border border-subtle-border space-y-1.5 text-left">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
-              <ShieldCheck className="w-4 h-4 text-player-two-sage" />
+          <div className="p-4 rounded-xl bg-background-canvas border border-border-subtle space-y-1.5 text-left">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
+              <ShieldCheck className="w-4 h-4 text-brand" />
               <span>Two-Person Cryptographic Seal</span>
             </div>
-            <p className="text-[11px] text-on-surface-variant leading-relaxed font-mono">
-              In MVP, your sanctuary is strictly locked to exactly two partners:
-              you and the person who accepts your invite. No third parties can ever
-              join.
+            <p className="text-[11px] text-text-muted leading-relaxed font-mono">
+              Your sanctuary is strictly locked to exactly two partners:
+              you and the person who accepts your invite. No third parties can ever join.
             </p>
           </div>
 
           {/* Submit CTA */}
           <Button
             type="submit"
-            variant="amber"
+            variant="brand"
             size="lg"
             isLoading={isLoading}
             className="w-full font-semibold"
@@ -171,7 +172,7 @@ export default function CreateCouplePage() {
             <ArrowRight className="w-4 h-4 ml-1.5" />
           </Button>
         </form>
-      </Card>
-    </div>
+      </div>
+    </motion.div>
   );
 }

@@ -12,6 +12,7 @@ import {
   Keyboard,
   ArrowRight,
   ShieldAlert,
+  Zap,
 } from "lucide-react";
 import { SpeedDuelCentralTarget } from "./SpeedDuelCentralTarget";
 import { SpeedDuelTimer } from "./SpeedDuelTimer";
@@ -385,40 +386,40 @@ export const SpeedDuelArena: React.FC<SpeedDuelArenaProps> = ({
   return (
     <div
       id="speed-duel-container"
-      className="relative min-h-[calc(100vh-4rem)] flex flex-col items-center justify-between p-4 sm:p-6 max-w-5xl mx-auto overflow-hidden text-neutral-200"
+      className="relative min-h-[calc(100vh-4rem)] flex flex-col items-center justify-between p-4 sm:p-6 max-w-5xl mx-auto overflow-hidden text-text-primary"
     >
       {/* Background ambient gradient highlighting tension */}
       <div className="absolute inset-0 pointer-events-none -z-10 flex items-center justify-center opacity-30">
         <div
           className={`w-[600px] h-[600px] rounded-full blur-[120px] transition-colors duration-700 ${
             localStage === "active"
-              ? "bg-amber-500/20"
+              ? "bg-brand/25"
               : isFalseStart
-              ? "bg-rose-600/15"
+              ? "bg-danger/20"
               : localStage === "tension"
-              ? "bg-amber-600/10"
-              : "bg-neutral-800/10"
+              ? "bg-brand/15"
+              : "bg-surface-raised/20"
           }`}
         />
       </div>
 
       {/* Top Header: Title, Round Indicator, Controls */}
-      <header id="speed-duel-header" className="w-full flex items-center justify-between border-b border-neutral-800/80 pb-3">
+      <header id="speed-duel-header" className="w-full flex items-center justify-between border-b border-border pb-3">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold text-sm">
-            ⚡
+          <div className="w-8 h-8 rounded-xl bg-surface border border-brand/40 text-brand flex items-center justify-center shadow-sm">
+            <Zap className="w-4 h-4 fill-brand/20" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-bold tracking-tight text-neutral-100">
+              <h1 className="text-base sm:text-lg font-bold tracking-tight text-text-primary font-display">
                 Speed Duel
               </h1>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-neutral-900 border border-neutral-800 text-neutral-400 uppercase">
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-surface border border-border text-brand uppercase font-medium">
                 {competitiveMode === "first_to_3" ? "Championship (First to 3)" : "Standard (5 Rounds)"}
               </span>
             </div>
-            <p className="text-xs text-neutral-400">
-              Authoritative real-time reaction game · Untrusted client timestamps
+            <p className="text-xs text-text-muted">
+              Authoritative kinetic reflex duel · Precision synchrony
             </p>
           </div>
         </div>
@@ -426,30 +427,30 @@ export const SpeedDuelArena: React.FC<SpeedDuelArenaProps> = ({
         {/* Action Controls: Audio, Video Companion, Role Switch */}
         <div className="flex items-center gap-2">
           {/* Controller Switcher (Allows testing both players seamlessly) */}
-          <div className="hidden sm:flex items-center rounded-lg bg-neutral-900 border border-neutral-800 p-0.5">
+          <div className="hidden sm:flex items-center rounded-xl bg-surface border border-border p-0.5">
             <button
               id="switch-player-alex-btn"
               type="button"
               onClick={() => handleSwitchPlayer("user_alex")}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+              className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-all cursor-pointer ${
                 activePlayerId === "user_alex"
-                  ? "bg-amber-500/20 text-amber-300 font-semibold"
-                  : "text-neutral-400 hover:text-neutral-200"
+                  ? "bg-player-one-ember/20 text-player-one-ember font-semibold"
+                  : "text-text-muted hover:text-text-primary"
               }`}
             >
-              Alex (Ember)
+              Alex (London)
             </button>
             <button
               id="switch-player-sam-btn"
               type="button"
               onClick={() => handleSwitchPlayer("user_sam")}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+              className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-all cursor-pointer ${
                 activePlayerId === "user_sam"
-                  ? "bg-emerald-500/20 text-emerald-300 font-semibold"
-                  : "text-neutral-400 hover:text-neutral-200"
+                  ? "bg-brand/20 text-brand font-semibold"
+                  : "text-text-muted hover:text-text-primary"
               }`}
             >
-              Sam (Sage)
+              Sam (Tokyo)
             </button>
           </div>
 
@@ -458,9 +459,9 @@ export const SpeedDuelArena: React.FC<SpeedDuelArenaProps> = ({
             type="button"
             onClick={() => setShowVideoCompanion(!showVideoCompanion)}
             title={showVideoCompanion ? "Hide video companion" : "Show video companion"}
-            className="p-2 rounded-lg bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-neutral-300 transition-colors"
+            className="p-2 rounded-xl bg-surface border border-border hover:bg-surface-raised text-text-secondary transition-colors cursor-pointer"
           >
-            {showVideoCompanion ? <Video className="w-4 h-4 text-emerald-400" /> : <VideoOff className="w-4 h-4 text-neutral-400" />}
+            {showVideoCompanion ? <Video className="w-4 h-4 text-brand" /> : <VideoOff className="w-4 h-4 text-text-muted" />}
           </button>
 
           <button
@@ -468,9 +469,9 @@ export const SpeedDuelArena: React.FC<SpeedDuelArenaProps> = ({
             type="button"
             onClick={handleToggleMute}
             title={isMuted ? "Unmute sound" : "Mute sound"}
-            className="p-2 rounded-lg bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-neutral-300 transition-colors"
+            className="p-2 rounded-xl bg-surface border border-border hover:bg-surface-raised text-text-secondary transition-colors cursor-pointer"
           >
-            {isMuted ? <VolumeX className="w-4 h-4 text-neutral-400" /> : <Volume2 className="w-4 h-4 text-amber-400" />}
+            {isMuted ? <VolumeX className="w-4 h-4 text-text-muted" /> : <Volume2 className="w-4 h-4 text-brand" />}
           </button>
         </div>
       </header>

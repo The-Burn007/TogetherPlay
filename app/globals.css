@@ -1,55 +1,99 @@
 @import "tailwindcss";
 
 @theme {
-  /* Surfaces & Canvas */
-  --color-surface-deep: #0e0d10;
-  --color-surface: #141316;
-  --color-surface-raised: #1a191d;
-  --color-surface-container: #212025;
-  --color-surface-overlay: #27252c;
-  --color-surface-container-high: #2d2b33;
-  --color-surface-container-highest: #37353e;
-  --color-surface-float: #32303a;
+  /* Brand Foundation */
+  --color-brand: #b7ff72;
+  --color-brand-hover: #c7ff8f;
+  --color-brand-active: #a2f854;
+  --color-brand-subtle: rgba(183, 255, 114, 0.08);
+  --color-brand-glow: rgba(183, 255, 114, 0.2);
 
-  /* Primary Entities: Player 1 (Ember) & Player 2 (Sage) */
-  --color-player-one-ember: #e05638;
-  --color-player-one-ember-hover: #eb674b;
-  --color-player-one-ember-subtle: rgba(224, 86, 56, 0.12);
-  --color-player-one-ember-glow: rgba(224, 86, 56, 0.28);
-  --color-player-one-ember-text: #f28b66;
+  /* Brand Colors */
+  --color-forest-graphite: #18251d;
+  --color-acid-mint: #b7ff72;
 
-  --color-player-two-sage: #4e7c69;
-  --color-player-two-sage-hover: #5b8e7a;
-  --color-player-two-sage-subtle: rgba(78, 124, 105, 0.14);
-  --color-player-two-sage-glow: rgba(78, 124, 105, 0.28);
-  --color-player-two-sage-text: #7ca897;
+  /* Restrained Warm-Neutral Supporting Palette */
+  --color-warm-cream: #f3ede0;
+  --color-cream: #f3ede0;
+  --color-soft-stone: #d8d3c7;
+  --color-stone: #d8d3c7;
+  --color-warm-charcoal: #252821;
+  --color-soft-sage: #aab7a5;
+  --color-muted-sage: #aab7a5;
+  --color-deep-forest: #111914;
+  --color-moss: #212e26;
+  --color-moss-surface: #212e26;
+  --color-muted-mint: #7fa85a;
 
-  /* Connection Entity: Shared Resonance (Amber) */
-  --color-shared-amber: #d99b38;
-  --color-shared-amber-hover: #e6a847;
-  --color-shared-amber-subtle: rgba(217, 155, 56, 0.12);
-  --color-shared-amber-glow: rgba(217, 155, 56, 0.28);
-  --color-shared-amber-text: #f2b24c;
+  /* Subtle Tonal Depth: Page Canvas -> Nav -> Primary -> Secondary -> Interactive */
+  --color-background-canvas: #111914;
+  --color-background-nav: #162019;
+  --color-background: #18251d;
+  --color-background-deep: #0d140f;
+  
+  --color-surface: #1a261f;
+  --color-surface-secondary: #212e26;
+  --color-surface-charcoal: #252821;
+  --color-surface-raised: #233128;
+  --color-surface-interactive: #28382e;
+  --color-surface-muted: #141d17;
+  --color-surface-overlay: #29392e;
+  --color-surface-float: #304236;
 
-  /* Text & Contrast */
-  --color-canvas-cream: #fbf9f5;
-  --color-canvas-sand: #ece7de;
-  --color-on-surface: #e6e1e4;
-  --color-on-surface-variant: #a39ea4;
-  --color-on-surface-subtle: #6c676e;
+  /* Standardized Typography Tokens */
+  --color-text-primary: #f3ede0;     /* Primary text: Warm Cream */
+  --color-text-secondary: #d8d3c7;   /* Secondary text: Soft Stone */
+  --color-text-muted: #aab7a5;       /* Subdued / metadata: Soft Sage */
+  --color-text-on-dark: #f3ede0;
+  --color-text-on-mint: #111914;
 
-  /* Subtle Borders & Hairlines */
-  --color-subtle-border: rgba(251, 249, 245, 0.08);
-  --color-accent-border: rgba(251, 249, 245, 0.16);
-  --color-border-amber: rgba(217, 155, 56, 0.32);
-  --color-border-ember: rgba(224, 86, 56, 0.32);
-  --color-border-sage: rgba(78, 124, 105, 0.32);
+  /* Architectural Borders: Restrained Warm Cream & Soft Stone Hairlines */
+  --color-border: rgba(243, 237, 224, 0.08);
+  --color-border-strong: rgba(216, 211, 199, 0.18);
+  --color-border-subtle: rgba(243, 237, 224, 0.04);
+  --color-border-charcoal: rgba(37, 40, 33, 0.7);
+  --color-border-brand: rgba(183, 255, 114, 0.45);
 
-  /* Status Colors */
-  --color-status-success: #4e7c69;
-  --color-status-warning: #d99b38;
-  --color-status-error: #cf4932;
-  --color-status-info: #5a8ab0;
+  /* Standardized Semantic Colors */
+  --color-semantic-success: #b7ff72; /* Connected / Primary action: Acid Mint */
+  --color-semantic-warning: #dca048; /* Warning: Restrained Amber */
+  --color-semantic-error: #d95a53;   /* Error: Restrained Red */
+  --color-semantic-info: #5c9eca;    /* Information: Restrained Blue */
+  --color-success: #b7ff72;
+  --color-warning: #dca048;
+  --color-danger: #d95a53;
+  --color-info: #5c9eca;
+
+  /* Partner Semantic Accents */
+  --color-player-one-ember: #e2583b;
+  --color-player-one-ember-hover: #ee694e;
+  --color-player-one-ember-subtle: rgba(226, 88, 59, 0.12);
+  --color-player-one-ember-glow: rgba(226, 88, 59, 0.28);
+  --color-player-one-ember-text: #f58e71;
+
+  --color-player-two-sage: #5e9480;
+  --color-player-two-sage-hover: #6ea490;
+  --color-player-two-sage-subtle: rgba(94, 148, 128, 0.14);
+  --color-player-two-sage-glow: rgba(94, 148, 128, 0.28);
+  --color-player-two-sage-text: #95c7b3;
+
+  --color-shared-amber: #dca048;
+  --color-shared-amber-hover: #e8ad4a;
+  --color-shared-amber-subtle: rgba(220, 160, 72, 0.12);
+  --color-shared-amber-glow: rgba(220, 160, 72, 0.28);
+  --color-shared-amber-text: #f5b755;
+
+  /* Fonts */
+  --font-display: var(--font-fraunces), "Fraunces", Georgia, serif;
+  --font-sans: var(--font-ibm-plex-sans), "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-body: var(--font-ibm-plex-sans), "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* Elevation Shadows */
+  --shadow-elevation-sm: 0 2px 4px 0 rgba(0, 0, 0, 0.45);
+  --shadow-elevation-md: 0 8px 24px -4px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(243, 237, 224, 0.06);
+  --shadow-elevation-lg: 0 18px 48px -8px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(243, 237, 224, 0.1);
+  --shadow-mint-glow: 0 0 20px 2px rgba(183, 255, 114, 0.18);
+  --shadow-mint-intense: 0 0 36px 4px rgba(183, 255, 114, 0.3);
 }
 
 :root {
@@ -57,15 +101,62 @@
 }
 
 body {
-  background-color: var(--color-surface-deep);
-  color: var(--color-on-surface);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--color-background-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-ibm-plex-sans), "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   min-height: 100vh;
   margin: 0;
   padding: 0;
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Environmental Atmospheric Backdrop: Deep Forest with Organic Warmth */
+.tp-environment {
+  background-color: var(--color-background-canvas);
+  background-image:
+    radial-gradient(ellipse 70% 40% at 50% -10%, rgba(37, 40, 33, 0.35), transparent 75%),
+    radial-gradient(ellipse 60% 40% at 90% 80%, rgba(94, 148, 128, 0.03), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 10% 90%, rgba(226, 88, 59, 0.025), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* Reduced, Non-Intrusive Architectural Grid */
+.tp-fine-grid {
+  background-image: linear-gradient(to right, rgba(243, 237, 224, 0.012) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(243, 237, 224, 0.012) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+/* Typography Utilities */
+.font-display {
+  font-family: var(--font-fraunces), "Fraunces", Georgia, serif;
+}
+
+.font-sans,
+.font-body {
+  font-family: var(--font-ibm-plex-sans), "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* Tabular Numerals for Scores, Coordinates, Latency, and Timers */
+.font-tabular,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Accessible Focus Indicator */
+.tp-focus-ring,
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* Accessible Touch Targets (WCAG 2.5.5 / 2.5.8) */
+.tp-touch-target {
+  min-height: 44px;
+  min-width: 44px;
 }
 
 /* Safe Area Inset Support */
@@ -88,18 +179,18 @@ body {
   }
 }
 
-/* Subtle custom scrollbar */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--color-surface-deep);
+  background: var(--color-background-canvas);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-surface-container-high);
+  background: var(--color-surface-raised);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-surface-container-highest);
+  background: var(--color-soft-sage);
 }

@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Home,
@@ -13,12 +13,11 @@ import {
   Sliders,
   Bell,
   Heart,
-  Radio,
   LogOut,
 } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { useRouter } from "next/navigation";
+import { motion } from "motion/react";
 
 export interface DesktopRailProps {
   onOpenNotifications: () => void;
@@ -32,7 +31,7 @@ export const DesktopRail: React.FC<DesktopRailProps> = ({
   const pathname = usePathname();
   const router = useRouter();
   const { showToast } = useToast();
-  const { user, signOut } = useAuth();
+  const { signOut } = useAuth();
 
   const handleSignOut = async () => {
     try {
@@ -53,35 +52,35 @@ export const DesktopRail: React.FC<DesktopRailProps> = ({
   const navItems = [
     {
       id: "nav-home",
-      label: "Home",
+      label: "Sanctuary",
       href: "/home",
       icon: Home,
       isActive: pathname === "/" || pathname === "/home",
     },
     {
       id: "nav-play",
-      label: "Play",
+      label: "Play Anthology",
       href: "/play",
       icon: Gamepad2,
       isActive: pathname.startsWith("/play"),
     },
     {
       id: "nav-memories",
-      label: "Memories",
+      label: "Our History",
       href: "/memories",
       icon: BookOpen,
       isActive: pathname.startsWith("/memories"),
     },
     {
       id: "nav-moments",
-      label: "Moments",
+      label: "Daily Moments",
       href: "/moments",
       icon: Camera,
       isActive: pathname.startsWith("/moments"),
     },
     {
       id: "nav-profile",
-      label: "Profile",
+      label: "Couple Profile",
       href: "/profile",
       icon: User,
       isActive: pathname.startsWith("/profile"),
@@ -90,40 +89,41 @@ export const DesktopRail: React.FC<DesktopRailProps> = ({
 
   const handlePartnerNudge = () => {
     showToast({
-      message: "Haptic heartbeat sent to Sam's device in Tokyo",
+      message: "Resonance heartbeat sent to Sam in Tokyo",
       variant: "nudge",
     });
   };
 
   return (
     <aside
-      className="hidden md:flex flex-col justify-between fixed top-0 bottom-0 left-0 z-40 w-20 lg:w-60 bg-surface-deep/95 border-r border-subtle-border backdrop-blur-xl transition-all duration-200"
-      aria-label="Desktop Navigation Rail"
+      className="hidden md:flex flex-col justify-between fixed top-5 bottom-5 left-5 z-40 w-20 lg:w-60 bg-surface/90 border border-border rounded-3xl backdrop-blur-2xl p-3.5 shadow-elevation-lg select-none"
+      aria-label="Sanctuary Navigation Dock"
     >
-      {/* Top: Brand & Private Couple Room Identity */}
-      <div className="p-4 flex flex-col space-y-4">
+      {/* Top: Brand Monogram & Space Seal */}
+      <div className="flex flex-col space-y-5">
         <Link
           href="/home"
-          className="flex items-center gap-3 group px-2 py-1.5 rounded-xl hover:bg-surface-raised transition-colors"
+          className="flex items-center gap-3 p-2 rounded-2xl hover:bg-surface-raised transition-colors group focus-visible:outline-2 focus-visible:outline-brand"
         >
-          {/* Couple Interlock Icon */}
-          <div className="relative w-9 h-9 rounded-full bg-surface-raised border border-subtle-border flex items-center justify-center shrink-0 shadow-sm">
-            <span className="w-2.5 h-2.5 rounded-full bg-player-one-ember -mr-1 shadow-sm" />
-            <span className="w-2.5 h-2.5 rounded-full bg-player-two-sage -ml-1 shadow-sm" />
+          {/* Couple Interlocking Monogram */}
+          <div className="relative w-10 h-10 rounded-2xl bg-background-canvas border border-border flex items-center justify-center shrink-0 shadow-sm">
+            <span className="w-3 h-3 rounded-full bg-player-one-ember -mr-1.5 shadow-sm" />
+            <span className="w-3 h-3 rounded-full bg-player-two-sage -ml-1.5 shadow-sm" />
+            <span className="absolute w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
           </div>
 
           <div className="hidden lg:flex flex-col min-w-0">
-            <span className="text-xs font-semibold text-canvas-cream tracking-tight group-hover:text-shared-amber transition-colors truncate">
-              Alex &amp; Sam
+            <span className="text-sm font-display font-medium text-text-primary tracking-tight group-hover:text-brand transition-colors truncate">
+              TogetherPlay
             </span>
-            <span className="text-[10px] font-mono text-on-surface-variant uppercase tracking-wider truncate">
-              TogetherPlay #4209
+            <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider truncate">
+              Two People · Room
             </span>
           </div>
         </Link>
 
-        {/* Primary Navigation Items */}
-        <nav className="flex flex-col space-y-1.5 pt-2">
+        {/* Primary Navigation Items with Sliding Active Pill */}
+        <nav className="flex flex-col space-y-1.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -131,24 +131,29 @@ export const DesktopRail: React.FC<DesktopRailProps> = ({
                 key={item.id}
                 href={item.href}
                 className={cn(
-                  "relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all select-none group",
+                  "relative flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-medium transition-all group focus-visible:outline-2 focus-visible:outline-brand",
                   item.isActive
-                    ? "bg-surface-raised text-shared-amber border border-subtle-border shadow-sm"
-                    : "text-on-surface-variant hover:text-on-surface hover:bg-surface-raised/60"
+                    ? "text-text-on-mint font-semibold"
+                    : "text-text-secondary hover:text-text-primary hover:bg-surface-raised/70"
                 )}
+                aria-current={item.isActive ? "page" : undefined}
               >
-                {/* Active Indicator Bar on Left */}
+                {/* Active Backdrop Pill with Layout Spring */}
                 {item.isActive ? (
-                  <span className="absolute left-0 inset-y-2 w-1 rounded-r-full bg-shared-amber" />
+                  <motion.div
+                    layoutId="desktop-active-pill"
+                    className="absolute inset-0 bg-brand rounded-xl shadow-sm -z-0"
+                    transition={{ type: "spring", stiffness: 450, damping: 30 }}
+                  />
                 ) : null}
 
                 <Icon
                   className={cn(
-                    "w-5 h-5 shrink-0 transition-transform group-hover:scale-105",
-                    item.isActive ? "text-shared-amber" : "text-on-surface-variant"
+                    "w-4 h-4 shrink-0 transition-transform group-hover:scale-105 z-10",
+                    item.isActive ? "text-text-on-mint" : "text-text-muted group-hover:text-text-primary"
                   )}
                 />
-                <span className="hidden lg:inline text-xs font-medium tracking-tight">
+                <span className="hidden lg:inline z-10 tracking-tight">
                   {item.label}
                 </span>
               </Link>
@@ -157,29 +162,29 @@ export const DesktopRail: React.FC<DesktopRailProps> = ({
         </nav>
       </div>
 
-      {/* Bottom: Partner Presence Widget, Notifications & Settings */}
-      <div className="p-3 flex flex-col space-y-3 border-t border-subtle-border">
-        {/* Partner Presence Pod (Compact on md, full card on lg) */}
-        <div className="p-2.5 rounded-xl bg-surface-raised border border-subtle-border flex items-center justify-between gap-2 shadow-sm">
+      {/* Bottom: Partner Presence Capsule & Controls */}
+      <div className="flex flex-col space-y-3 pt-3 border-t border-border-subtle">
+        {/* Partner Pulse Capsule */}
+        <div className="p-2.5 rounded-2xl bg-background-canvas border border-border flex items-center justify-between gap-2 shadow-sm">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="relative shrink-0">
-              <div className="w-8 h-8 rounded-full bg-player-two-sage/20 border border-player-two-sage/40 flex items-center justify-center font-mono font-bold text-xs text-player-two-sage">
+              <div className="w-8 h-8 rounded-full bg-surface-raised border border-player-two-sage/40 flex items-center justify-center font-mono font-bold text-xs text-player-two-sage">
                 S
               </div>
-              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-player-two-sage border-2 border-surface-deep animate-pulse" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-brand border-2 border-background-canvas animate-pulse" />
             </div>
 
             <div className="hidden lg:flex flex-col min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-semibold text-on-surface truncate">
+                <span className="text-xs font-semibold text-text-primary truncate">
                   Sam
                 </span>
-                <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-player-two-sage/15 text-player-two-sage-text">
-                  Online
+                <span className="text-[9px] font-mono text-brand font-medium">
+                  · Tokyo
                 </span>
               </div>
-              <span className="text-[10px] font-mono text-on-surface-variant truncate">
-                Tokyo · 07:34 JST
+              <span className="text-[10px] font-mono text-text-muted truncate">
+                09:24 JST · Clear
               </span>
             </div>
           </div>
@@ -187,40 +192,37 @@ export const DesktopRail: React.FC<DesktopRailProps> = ({
           <button
             onClick={handlePartnerNudge}
             title="Send tactile pulse to Sam"
-            className="w-7 h-7 rounded-lg bg-surface-deep hover:bg-surface-overlay border border-subtle-border flex items-center justify-center text-player-one-ember hover:scale-105 transition-all cursor-pointer shrink-0"
+            className="w-8 h-8 rounded-xl bg-surface-raised hover:bg-surface-overlay border border-border flex items-center justify-center text-brand hover:scale-105 transition-all cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-brand"
             aria-label="Send partner pulse"
           >
-            <Heart className="w-3.5 h-3.5 fill-player-one-ember/20 hover:fill-player-one-ember" />
+            <Heart className="w-3.5 h-3.5 fill-brand/20 hover:fill-brand" />
           </button>
         </div>
 
         {/* Action Row: Notifications & Settings */}
         <div className="flex items-center justify-between px-1">
-          {/* Notifications Button */}
           <button
             onClick={onOpenNotifications}
-            className="relative flex items-center gap-2 p-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-raised transition-all cursor-pointer"
-            aria-label={`Whispers & notifications (${unreadCount} unread)`}
+            className="relative flex items-center gap-1.5 p-2 rounded-xl text-text-secondary hover:text-text-primary hover:bg-surface-raised transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-brand"
+            aria-label={`Whispers and notifications (${unreadCount} unread)`}
           >
             <div className="relative">
               <Bell className="w-4 h-4" />
               {unreadCount > 0 ? (
-                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-shared-amber animate-pulse" />
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-brand animate-pulse" />
               ) : null}
             </div>
-            <span className="hidden lg:inline text-xs text-on-surface-variant font-medium">
+            <span className="hidden lg:inline text-xs text-text-secondary font-medium">
               Whispers
             </span>
           </button>
 
-          {/* Action Icons */}
           <div className="flex items-center gap-1">
-            {/* Settings Link */}
             <Link
               href="/settings"
               className={cn(
-                "p-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-raised transition-all",
-                pathname === "/settings" ? "text-shared-amber bg-surface-raised" : ""
+                "p-2 rounded-xl text-text-secondary hover:text-text-primary hover:bg-surface-raised transition-all focus-visible:outline-2 focus-visible:outline-brand",
+                pathname === "/settings" ? "text-brand bg-surface border border-border" : ""
               )}
               aria-label="Couple Settings"
               title="Settings"
@@ -228,10 +230,9 @@ export const DesktopRail: React.FC<DesktopRailProps> = ({
               <Sliders className="w-4 h-4" />
             </Link>
 
-            {/* Sign Out Button */}
             <button
               onClick={handleSignOut}
-              className="p-2 rounded-lg text-on-surface-variant hover:text-status-error hover:bg-surface-raised transition-all cursor-pointer"
+              className="p-2 rounded-xl text-text-secondary hover:text-danger hover:bg-surface-raised transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-danger"
               aria-label="Sign out"
               title="Sign Out"
             >

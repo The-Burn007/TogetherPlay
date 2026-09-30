@@ -153,8 +153,8 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
         {history.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-[11px] font-mono text-stone-400">
-              <span>Authoritative Turn Log</span>
-              <span>{history.length} events verified by server</span>
+              <span>Turn Log</span>
+              <span>{history.length} turns recorded</span>
             </div>
 
             <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 text-[11px] font-mono">

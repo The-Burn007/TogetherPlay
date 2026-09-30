@@ -13,15 +13,15 @@ export const Container: React.FC<ContainerProps> = ({
 }) => {
   const sizeMap = {
     sm: "max-w-xl",
-    md: "max-w-2xl",
-    lg: "max-w-4xl",
+    md: "max-w-3xl lg:max-w-[860px]",
+    lg: "max-w-5xl",
     full: "max-w-full",
   };
 
   return (
     <div
       className={cn(
-        "w-full mx-auto px-4 sm:px-6 pt-18 md:pt-20 pb-24 md:pb-12 flex flex-col space-y-6",
+        "w-full mx-auto px-4 sm:px-6 pt-4 sm:pt-6 md:pt-8 pb-20 md:pb-12 flex flex-col space-y-6",
         sizeMap[size],
         className
       )}

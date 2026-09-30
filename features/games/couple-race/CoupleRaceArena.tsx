@@ -546,7 +546,7 @@ export const CoupleRaceArena: React.FC<CoupleRaceArenaProps> = ({
             <span className="text-stone-300">{statusMessage}</span>
           </div>
           <div className="text-stone-500">
-            Authoritative Engine v2.4 · Server Randomness
+            Synchronized Tabletop
           </div>
         </div>
 
@@ -663,7 +663,7 @@ export const CoupleRaceArena: React.FC<CoupleRaceArenaProps> = ({
 
               <div className="space-y-2">
                 <strong className="text-stone-100 font-mono text-[11px] uppercase tracking-wider block">
-                  Authoritative Mechanics
+                  Game Rules
                 </strong>
                 <ul className="space-y-1.5 list-disc list-inside text-stone-400">
                   <li>

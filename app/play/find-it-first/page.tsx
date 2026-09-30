@@ -27,12 +27,14 @@ import {
 import { GameRoomVideoCompanion } from "@/features/video/GameRoomVideoCompanion";
 import { usePresence } from "@/lib/presence/usePresence";
 import { useNotifications } from "@/lib/presence/useNotifications";
+import { useAuth } from "@/lib/auth/AuthContext";
 import { PartnerPresenceBadge } from "@/components/ui/PartnerPresenceBadge";
 import type { GameSession, GameState } from "@/types/domain";
 
 export default function FindItFirstRoomPage() {
   const searchParams = useSearchParams();
   const { showToast } = useToast();
+  const { user } = useAuth();
   const { partnerDisplayName, partnerCity, partnerState, partnerConnection, setMyState } =
     usePresence();
   const { requestRematch } = useNotifications();
@@ -46,11 +48,14 @@ export default function FindItFirstRoomPage() {
   }, [setMyState]);
 
   // Room & Identity setup
+  const isDev = process.env.NODE_ENV !== "production";
   const urlGameId = searchParams.get("gameId") || "fif_togetherplay_tabletop";
   const urlPlayer = searchParams.get("player");
-  const [activePlayerId, setActivePlayerId] = useState<string>(
-    urlPlayer === "sam" ? "user_sam" : "user_alex"
-  );
+  const [activePlayerId, setActivePlayerId] = useState<string>(() => {
+    if (isDev && urlPlayer === "sam") return "user_sam";
+    if (user?.uid) return user.uid;
+    return "user_alex";
+  });
   const [dualSessionMode, setDualSessionMode] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
@@ -540,14 +545,16 @@ export default function FindItFirstRoomPage() {
                     {activePlayerId === "user_alex" ? "Alex (London)" : "Sam (Tokyo)"}
                   </strong>
                 </span>
-                <button
-                  onClick={() =>
-                    setActivePlayerId(activePlayerId === "user_alex" ? "user_sam" : "user_alex")
-                  }
-                  className="underline hover:text-stone-200"
-                >
-                  Switch Player
-                </button>
+                {isDev && (
+                  <button
+                    onClick={() =>
+                      setActivePlayerId(activePlayerId === "user_alex" ? "user_sam" : "user_alex")
+                    }
+                    className="underline hover:text-stone-200 cursor-pointer"
+                  >
+                    Switch Player
+                  </button>
+                )}
               </div>
               <GameBoardGrid
                 board={board}
@@ -563,13 +570,15 @@ export default function FindItFirstRoomPage() {
         </div>
       )}
 
-      {/* Dual Browser Instructions Note */}
-      <div className="rounded-xl p-3 bg-black/40 border border-stone-800/80 text-center text-xs font-mono text-stone-400 space-y-1">
-        <p>
-          <span className="text-amber-400 font-bold">Simultaneous Multi-Browser Testing:</span> Open this link in another tab with{" "}
-          <code className="text-stone-300 bg-stone-900 px-1.5 py-0.5 rounded">?player=sam</code> to test live synchronization across independent browser tabs!
-        </p>
-      </div>
+      {/* Dual Browser Instructions Note (Development only) */}
+      {isDev && (
+        <div className="rounded-xl p-3 bg-black/40 border border-stone-800/80 text-center text-xs font-mono text-stone-400 space-y-1">
+          <p>
+            <span className="text-amber-400 font-bold">Simultaneous Multi-Browser Testing:</span> Open this link in another tab with{" "}
+            <code className="text-stone-300 bg-stone-900 px-1.5 py-0.5 rounded">?player=sam</code> to test live synchronization across independent browser tabs!
+          </p>
+        </div>
+      )}
     </Container>
   );
 }

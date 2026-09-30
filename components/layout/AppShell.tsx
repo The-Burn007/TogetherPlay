@@ -127,7 +127,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               }
               className="text-brand hover:underline font-mono text-[11px] cursor-pointer"
             >
-              Switch to {user?.uid === "user_alex" ? "Sam (P2)" : "Alex (P1)"}
+              Switch to {user?.uid === "user_alex" ? "Sam" : "Alex"}
             </button>
             <span className="text-text-muted">|</span>
             <button

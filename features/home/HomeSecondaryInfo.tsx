@@ -5,7 +5,7 @@ import { ShieldCheck, Heart, Radio, MapPin } from "lucide-react";
 
 export interface HomeSecondaryInfoProps {
   daysTogether: number;
-  distanceKm: number;
+  distanceKm?: number;
   encryptionSeal: string;
   isNewCouple?: boolean;
 }
@@ -17,29 +17,37 @@ export const HomeSecondaryInfo: React.FC<HomeSecondaryInfoProps> = ({
   isNewCouple = false,
 }) => {
   return (
-    <footer className="pt-6 pb-12 border-t border-border/60 flex flex-col items-center gap-3 text-center select-none">
-      {/* Intimate Relationship Milestone */}
+    <footer className="pt-4 pb-8 border-t border-border flex flex-col items-center gap-3 text-center">
+      {/* Quiet Telemetry Readout */}
       <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-mono text-soft-stone">
         <div className="flex items-center gap-1.5 text-warm-cream">
-          <Heart className="w-3.5 h-3.5 text-player-one-ember fill-player-one-ember/20" />
-          <span className="font-tabular font-medium">{isNewCouple ? "Day 1 of your journey" : `Day ${daysTogether} together`}</span>
+          <Heart className="w-3.5 h-3.5 text-soft-stone fill-soft-stone/20" />
+          <span className="font-tabular font-medium">
+            {isNewCouple ? "Day 1 of your journey" : `Day ${daysTogether} together`}
+          </span>
         </div>
-        <span className="text-soft-sage" aria-hidden="true">·</span>
-        <div className="flex items-center gap-1.5 text-soft-stone">
-          <MapPin className="w-3.5 h-3.5 text-soft-stone" />
-          <span className="font-tabular">{isNewCouple ? "Awaiting partner location" : `${distanceKm.toLocaleString()} km bridged`}</span>
-        </div>
+
+        {distanceKm !== undefined && distanceKm > 0 ? (
+          <>
+            <span className="text-soft-sage" aria-hidden="true">·</span>
+            <div className="flex items-center gap-1.5 text-soft-stone">
+              <MapPin className="w-3.5 h-3.5 text-soft-sage" />
+              <span className="font-tabular">{`${distanceKm.toLocaleString()} km bridged`}</span>
+            </div>
+          </>
+        ) : null}
+
         <span className="text-soft-sage" aria-hidden="true">·</span>
         <div className="flex items-center gap-1.5 text-soft-sage">
           <Radio className="w-3.5 h-3.5 text-soft-sage" />
-          <span>Private sync</span>
+          <span>Encrypted peer sync</span>
         </div>
       </div>
 
       {/* Sanctuary Privacy Guarantee */}
-      <div className="flex items-center gap-1.5 text-[11px] font-mono text-soft-sage">
-        <ShieldCheck className="w-3.5 h-3.5 text-soft-stone" />
-        <span>{encryptionSeal} · Private sanctuary for two</span>
+      <div className="flex items-center gap-1.5 text-[11px] font-mono text-soft-sage/80">
+        <ShieldCheck className="w-3.5 h-3.5 text-soft-sage" />
+        <span>{encryptionSeal} · Zero public trackers</span>
       </div>
     </footer>
   );

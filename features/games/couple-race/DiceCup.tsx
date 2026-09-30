@@ -162,7 +162,7 @@ export const DiceCup: React.FC<DiceCupProps> = ({
             }`}
           >
             <Dices className="w-4 h-4" />
-            <span>{isRolling ? "Rolling Authoritatively..." : "Roll Dice"}</span>
+            <span>{isRolling ? "Rolling..." : "Roll Dice"}</span>
           </button>
         )}
       </div>

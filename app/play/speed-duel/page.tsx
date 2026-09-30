@@ -28,7 +28,7 @@ function SpeedDuelContent() {
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-brand animate-pulse" />
           <span className="text-[11px] font-mono text-text-muted tracking-wider uppercase">
-            P2P Authoritative Sync Active
+            Real-Time Sync Active
           </span>
         </div>
       </nav>

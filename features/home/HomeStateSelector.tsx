@@ -29,6 +29,11 @@ export const HomeStateSelector: React.FC<HomeStateSelectorProps> = ({
   coupleId,
   forceVisible = false,
 }) => {
+  // In production builds, development controls are strictly disabled and never rendered.
+  if (process.env.NODE_ENV === "production") {
+    return null;
+  }
+
   const [isDebugActive, setIsDebugActive] = useState(forceVisible);
 
   useEffect(() => {
@@ -36,7 +41,7 @@ export const HomeStateSelector: React.FC<HomeStateSelectorProps> = ({
       setIsDebugActive(true);
       return;
     }
-    // Only show if explicitly requested via query parameter (?debug=true or ?dev=true)
+    // Only show in development if explicitly requested via query parameter (?debug=true or ?dev=true)
     if (typeof window !== "undefined") {
       const search = window.location.search;
       if (search.includes("debug=true") || search.includes("dev=true")) {
@@ -45,7 +50,7 @@ export const HomeStateSelector: React.FC<HomeStateSelectorProps> = ({
     }
   }, [forceVisible]);
 
-  // NEVER show development terminology in normal consumer view
+  // NEVER show development tooling in normal consumer view
   if (!isDebugActive) {
     return null;
   }

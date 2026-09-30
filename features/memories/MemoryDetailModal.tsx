@@ -152,7 +152,7 @@ export const MemoryDetailModal: React.FC<MemoryDetailModalProps> = ({
               )}
               {memory.gameActivity.winnerName && (
                 <p className="text-player-two-sage font-medium">
-                  Authoritative Winner: {memory.gameActivity.winnerName}
+                  Winner: {memory.gameActivity.winnerName}
                 </p>
               )}
             </div>

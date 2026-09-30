@@ -44,6 +44,7 @@ function RegisterForm() {
 
   const handleBypassTestUser = useCallback(
     async (preset: "alex" | "sam" = "alex") => {
+      if (process.env.NODE_ENV === "production") return;
       setIsBypassing(true);
       try {
         await signInAsTestUser(preset, displayName.trim() || undefined);
@@ -188,7 +189,7 @@ function RegisterForm() {
               isLoading={isBypassing}
               className="w-full text-xs justify-center font-medium"
             >
-              <span>Test as Alex (P1)</span>
+              <span>Test as Alex</span>
             </Button>
             <Button
               type="button"
@@ -198,7 +199,7 @@ function RegisterForm() {
               isLoading={isBypassing}
               className="w-full text-xs justify-center font-medium"
             >
-              <span>Test as Sam (P2)</span>
+              <span>Test as Sam</span>
             </Button>
           </div>
         </div>

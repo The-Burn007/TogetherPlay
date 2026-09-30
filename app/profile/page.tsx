@@ -266,8 +266,10 @@ export default function ProfilePage() {
               ))}
             </div>
 
-            {/* Discreet developer simulation trigger (hidden from normal view) */}
-            {typeof window !== "undefined" && window.location.search.includes("debug=true") && (
+            {/* Discreet developer simulation trigger (strictly disabled in production) */}
+            {process.env.NODE_ENV !== "production" &&
+              typeof window !== "undefined" &&
+              window.location.search.includes("debug=true") && (
               <div className="pt-2 border-t border-subtle-border/50 flex items-center justify-between">
                 <span className="text-[10px] font-mono text-soft-sage">
                   Debug Partner State:

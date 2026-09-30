@@ -33,7 +33,8 @@ export default function MemoriesPage() {
   const { user, isTestMode } = useAuth();
   const { showToast } = useToast();
 
-  const [coupleId, setCoupleId] = useState<string>("cpl_tokyo_london_4209");
+  const isDev = process.env.NODE_ENV !== "production";
+  const [coupleId, setCoupleId] = useState<string>(() => (isDev ? "cpl_tokyo_london_4209" : ""));
   const [memories, setMemories] = useState<CoupleMemory[]>([]);
   const [activeFilter, setActiveFilter] = useState<MemoryFilter>("all");
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -57,11 +58,16 @@ export default function MemoriesPage() {
             return;
           }
         } catch (err) {
-          console.warn("Could not fetch user couple, using sanctuary fallback:", err);
+          console.warn("Could not fetch user couple:", err);
         }
       }
       if (isMounted) {
-        setCoupleId("cpl_tokyo_london_4209");
+        if (isDev) {
+          setCoupleId("cpl_tokyo_london_4209");
+        } else {
+          setCoupleId("");
+          setIsLoading(false);
+        }
       }
     }
 
@@ -70,11 +76,14 @@ export default function MemoriesPage() {
     return () => {
       isMounted = false;
     };
-  }, [user]);
+  }, [user, isDev]);
 
   // 2. Realtime subscription to couple memories
   useEffect(() => {
-    if (!coupleId) return;
+    if (!coupleId) {
+      setIsLoading(false);
+      return;
+    }
 
     setIsLoading(true);
     setErrorMessage(null);

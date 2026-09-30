@@ -160,7 +160,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             onClick={onStartGame}
             className="w-full py-3 px-4 rounded-xl font-serif text-sm font-bold bg-gradient-to-r from-emerald-600 to-emerald-500 text-neutral-950 shadow-xl flex items-center justify-center gap-2 hover:brightness-110"
           >
-            <span>Begin Authoritative Match</span>
+            <span>Begin Match</span>
             <ArrowRight className="w-4 h-4" />
           </motion.button>
         )}
@@ -184,7 +184,7 @@ export const CountdownView: React.FC<CountdownViewProps> = ({ countdownNumber })
   return (
     <div className="py-12 flex flex-col items-center justify-center space-y-4 text-center">
       <span className="text-xs font-mono uppercase tracking-widest text-amber-400 font-semibold">
-        Authoritative Synchronization
+        Synchronizing Match
       </span>
       <AnimatePresence mode="wait">
         <motion.div
@@ -336,7 +336,7 @@ export const RoundResultOverlay: React.FC<RoundResultOverlayProps> = ({
         </div>
         {winnerPlayerId && (
           <p className="text-xs font-mono text-amber-300/80">
-            +{pointsAwarded} Authoritative Points (+{speedBonus} reflex bonus)
+            +{pointsAwarded} Points (+{speedBonus} reflex bonus)
           </p>
         )}
       </div>
@@ -420,7 +420,7 @@ export const FinalResultModal: React.FC<FinalResultModalProps> = ({
       {roundHistory.length > 0 && (
         <div className="space-y-1.5 text-left bg-black/30 p-3 rounded-xl border border-stone-800/80 text-xs font-mono">
           <div className="text-[10px] uppercase text-stone-400 font-bold pb-1 border-b border-stone-800">
-            Authoritative Round Ledger
+            Round History
           </div>
           {roundHistory.map((item, idx) => (
             <div key={idx} className="flex justify-between items-center text-stone-300 py-0.5">
@@ -440,7 +440,7 @@ export const FinalResultModal: React.FC<FinalResultModalProps> = ({
         className="w-full py-3.5 px-4 rounded-xl font-serif text-sm font-bold bg-gradient-to-r from-amber-600 to-amber-500 text-neutral-950 hover:brightness-110 shadow-xl flex items-center justify-center gap-2 cursor-pointer"
       >
         <RotateCcw className="w-4 h-4" />
-        <span>Request Authoritative Rematch</span>
+        <span>Request Rematch</span>
       </button>
     </motion.div>
   );

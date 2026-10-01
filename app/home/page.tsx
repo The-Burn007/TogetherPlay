@@ -99,14 +99,15 @@ function HomeContent() {
             setSanctuaryState((prevState) => {
               if (!prevState) return null; // State G: Initial failure -> full unavailable screen
               
-              // State E: Preserve previous state structure, but update presence to mark it unverified
+              // State E: Preserve previous state structure and last known presence state,
+              // but update presence to mark it unverified without fabricating an offline state
               return {
                 ...prevState,
                 partner: prevState.partner
                   ? {
                       ...prevState.partner,
-                      presenceState: "offline",
-                      activityDetail: "Presence unavailable (sync paused)",
+                      presenceVerified: false,
+                      activityDetail: "Presence unverified (sync paused)",
                     }
                   : null,
                 presenceStatusHeadline: prevState.partner

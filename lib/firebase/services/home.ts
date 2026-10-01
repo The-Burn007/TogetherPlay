@@ -25,13 +25,22 @@ export interface HomeUserData {
   weather?: string;
 }
 
+export type HomePartnerPresenceState =
+  | "online"
+  | "offline"
+  | "in_game"
+  | "in_call"
+  | "away"
+  | "unverified";
+
 export interface HomePartnerData {
   displayName: string;
   city?: string;
   localTime?: string;
   colorRole: "sage";
   avatarUrl?: string;
-  presenceState: "online" | "offline" | "in_game" | "in_call" | "away";
+  presenceState: HomePartnerPresenceState;
+  presenceVerified?: boolean;
   lastActiveAgo?: string;
   weather?: string;
   activityDetail?: string;
@@ -247,7 +256,7 @@ export function getPresetHomeData(key: HomePresetKey, customUserName?: string): 
         distanceKm: 9560,
         encryptionSeal: "End-to-End Encrypted Sanctuary",
         greetingText: greeting,
-        presenceStatusHeadline: "Sam is in game.",
+        presenceStatusHeadline: "Sam is in a game.",
         presenceActionPrompt: "Join Sam?",
         user: {
           displayName: userName,
@@ -264,6 +273,7 @@ export function getPresetHomeData(key: HomePresetKey, customUserName?: string): 
           colorRole: "sage",
           avatarUrl: "https://picsum.photos/seed/sam-profile-tokyo/200/200",
           presenceState: "in_game",
+          presenceVerified: true,
           weather: "Clear · 18°C",
           activityDetail: "Playing Find It First (Round 2)",
         },
@@ -291,7 +301,7 @@ export function getPresetHomeData(key: HomePresetKey, customUserName?: string): 
         distanceKm: 9560,
         encryptionSeal: "End-to-End Encrypted Sanctuary",
         greetingText: greeting,
-        presenceStatusHeadline: "Sam is in call.",
+        presenceStatusHeadline: "Sam is in a call.",
         presenceActionPrompt: "Join audio?",
         user: {
           displayName: userName,
@@ -308,6 +318,7 @@ export function getPresetHomeData(key: HomePresetKey, customUserName?: string): 
           colorRole: "sage",
           avatarUrl: "https://picsum.photos/seed/sam-profile-tokyo/200/200",
           presenceState: "in_call",
+          presenceVerified: true,
           weather: "Clear · 18°C",
           activityDetail: "Connected in sanctuary audio room",
         },
@@ -767,16 +778,16 @@ export class HomeService {
       // 4. Authoritative Presence & State
       const partnerPresence = presenceService.getUserPresence(partnerId);
       let isOnline = false;
-      let presenceState: "online" | "offline" | "in_game" | "in_call" | "away" = "offline";
+      let presenceState: HomePartnerPresenceState = "offline";
       let lastActiveAgo: string | undefined = undefined;
 
       if (partnerPresence) {
         if (partnerPresence.state === "IN_GAME") {
           presenceState = "in_game";
-          isOnline = true;
+          isOnline = false; // distinct semantic state, not collapsed into generic online
         } else if (partnerPresence.state === "IN_CALL") {
           presenceState = "in_call";
-          isOnline = true;
+          isOnline = false; // distinct semantic state, not collapsed into generic online
         } else if (partnerPresence.state === "AWAY") {
           presenceState = "away";
           isOnline = false;
@@ -820,7 +831,11 @@ export class HomeService {
       let partnerActivityDetail: string | undefined = undefined;
       if (partnerPresence?.currentActivity) {
         partnerActivityDetail = partnerPresence.currentActivity;
-      } else if (isOnline) {
+      } else if (presenceState === "in_game") {
+        partnerActivityDetail = "In tabletop session";
+      } else if (presenceState === "in_call") {
+        partnerActivityDetail = "In voice channel";
+      } else if (presenceState === "online") {
         partnerActivityDetail = "Connected in sanctuary";
       } else if (lastActiveAgo) {
         partnerActivityDetail = `Last active ${lastActiveAgo}`;
@@ -833,6 +848,7 @@ export class HomeService {
         colorRole: "sage",
         avatarUrl: partnerProfile?.photoURL || undefined,
         presenceState,
+        presenceVerified: true,
         lastActiveAgo,
         weather: undefined,
         activityDetail: partnerActivityDetail,
@@ -885,6 +901,16 @@ export class HomeService {
           actionLabel: "Resume Game Session",
           actionHref: continueGame.href,
         };
+      } else if (presenceState === "in_game") {
+        currentActivity = {
+          type: "game",
+          title: "Tabletop Session Active",
+          subtitle: `${partnerName} is in an active tabletop session. Jump in to play together.`,
+          badgeLabel: `${partnerName} in Game`,
+          badgeVariant: "amber",
+          actionLabel: `Join ${partnerName}`,
+          actionHref: "/play",
+        };
       } else if (presenceState === "in_call") {
         currentActivity = {
           type: "call",
@@ -895,7 +921,7 @@ export class HomeService {
           actionLabel: "Join Voice Call",
           actionHref: "/play",
         };
-      } else if (isOnline) {
+      } else if (presenceState === "online") {
         currentActivity = {
           type: "synced",
           title: "Sanctuary Synced",
@@ -938,6 +964,33 @@ export class HomeService {
         recentMemory = null;
       }
 
+      let presenceStatusHeadline: string;
+      let presenceActionPrompt: string;
+
+      switch (presenceState) {
+        case "in_game":
+          presenceStatusHeadline = `${partnerName} is in a game.`;
+          presenceActionPrompt = "Rejoin session?";
+          break;
+        case "in_call":
+          presenceStatusHeadline = `${partnerName} is in a call.`;
+          presenceActionPrompt = "Join call?";
+          break;
+        case "away":
+          presenceStatusHeadline = `${partnerName} is away.`;
+          presenceActionPrompt = "Leave a whisper?";
+          break;
+        case "online":
+          presenceStatusHeadline = `${partnerName} is online.`;
+          presenceActionPrompt = "Play something?";
+          break;
+        case "offline":
+        default:
+          presenceStatusHeadline = `${partnerName} is offline.`;
+          presenceActionPrompt = "Leave a whisper?";
+          break;
+      }
+
       return {
         presetKey: "live",
         connectionStatus: "connected",
@@ -946,8 +999,8 @@ export class HomeService {
         distanceKm: undefined,
         encryptionSeal: "End-to-End Encrypted Sanctuary",
         greetingText: greeting,
-        presenceStatusHeadline: isOnline ? `${partnerName} is online.` : `${partnerName} is offline.`,
-        presenceActionPrompt: isOnline ? "Play something?" : "Leave a whisper?",
+        presenceStatusHeadline,
+        presenceActionPrompt,
         user,
         partner,
         currentActivity,

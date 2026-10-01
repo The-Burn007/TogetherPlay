@@ -225,12 +225,12 @@ describe("Home Screen Sanctuary Data & Meaningful States", () => {
     });
   });
 
-  describe("Meaningful State: partner_in_game", () => {
+    describe("Meaningful State: partner_in_game", () => {
     it("shows in-game presence and provides direct join action", () => {
       const state = getPresetHomeData("partner_in_game", "Alex");
       expect(state.partner).not.toBeNull();
       expect(state.partner?.presenceState).toBe("in_game");
-      expect(state.presenceStatusHeadline).toBe("Sam is in game.");
+      expect(state.presenceStatusHeadline).toBe("Sam is in a game.");
       expect(state.presenceActionPrompt).toBe("Join Sam?");
       expect(state.currentActivity.type).toBe("game");
       expect(state.currentActivity.actionLabel).toContain("Join Sam");
@@ -242,7 +242,7 @@ describe("Home Screen Sanctuary Data & Meaningful States", () => {
       const state = getPresetHomeData("partner_in_call", "Alex");
       expect(state.partner).not.toBeNull();
       expect(state.partner?.presenceState).toBe("in_call");
-      expect(state.presenceStatusHeadline).toBe("Sam is in call.");
+      expect(state.presenceStatusHeadline).toBe("Sam is in a call.");
       expect(state.presenceActionPrompt).toBe("Join audio?");
       expect(state.currentActivity.type).toBe("call");
       expect(state.currentActivity.actionLabel).toBe("Rejoin Voice Call");

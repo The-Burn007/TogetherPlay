@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
-import { ArrowRight, Heart, Gamepad2, Phone, UserPlus, Moon, Radio } from "lucide-react";
+import { ArrowRight, Gamepad2, Phone, UserPlus, Moon, Radio, WifiOff } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import type { HomeUserData, HomePartnerData } from "@/lib/firebase/services/home";
 
@@ -44,11 +44,14 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
     setTimeout(() => setPulseActive(false), 900);
   };
 
-  const isOnline = partner?.presenceState === "online";
-  const isInGame = partner?.presenceState === "in_game";
-  const isInCall = partner?.presenceState === "in_call";
-  const isAway = partner?.presenceState === "away";
-  const isOffline = partner?.presenceState === "offline";
+  // 1. Distinct Semantic Presence States
+  const isUnverified =
+    partner?.presenceVerified === false || partner?.presenceState === "unverified";
+  const isInGame = !isUnverified && partner?.presenceState === "in_game";
+  const isInCall = !isUnverified && partner?.presenceState === "in_call";
+  const isOnline = !isUnverified && partner?.presenceState === "online";
+  const isAway = !isUnverified && partner?.presenceState === "away";
+  const isOffline = !isUnverified && (partner?.presenceState === "offline" || !partner?.presenceState);
 
   return (
     <section className="relative w-full rounded-3xl bg-surface border border-border/80 p-6 sm:p-8 shadow-elevation-md overflow-hidden">
@@ -73,7 +76,9 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
         {/* Dynamic Resonance Bridge Filament across distance */}
         <div
           className={`absolute top-1/2 left-20 right-20 -translate-y-1/2 h-[1px] z-0 hidden sm:block transition-opacity duration-500 ${
-            isOnline ? "bg-gradient-to-r from-border via-brand/40 to-border opacity-100" : "bg-gradient-to-r from-border via-border/40 to-border opacity-40"
+            !isUnverified && (isOnline || isInGame || isInCall)
+              ? "bg-gradient-to-r from-border via-brand/40 to-border opacity-100"
+              : "bg-gradient-to-r from-border via-border/40 to-border opacity-40"
           }`}
           aria-hidden="true"
         />
@@ -134,11 +139,12 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
           {partner ? (
             <div className="flex flex-col items-center gap-2 text-center w-32 sm:w-40">
               <div className="relative transition-transform duration-200 motion-reduce:transition-none hover:scale-105">
+                {/* Visual semantics: only pass isOnline=true for pure ONLINE state. Do NOT pass away into isOnline! */}
                 <Avatar
                   name={partner.displayName}
                   colorRole="sage"
                   size="xl"
-                  isOnline={isOnline || isInGame || isInCall || isAway}
+                  isOnline={isOnline}
                   imageUrl={partner.avatarUrl}
                 />
                 {isInGame && (
@@ -146,6 +152,7 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
                     className="absolute -top-1 -right-1 p-1 rounded-full bg-brand text-text-on-mint shadow-elevation-sm"
                     title="In game session"
                     aria-label="In game session"
+                    data-testid="partner-in-game-indicator"
                   >
                     <Gamepad2 className="w-3.5 h-3.5" />
                   </span>
@@ -155,6 +162,7 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
                     className="absolute -top-1 -right-1 p-1 rounded-full bg-info text-warm-cream shadow-elevation-sm"
                     title="In call"
                     aria-label="In call"
+                    data-testid="partner-in-call-indicator"
                   >
                     <Phone className="w-3.5 h-3.5" />
                   </span>
@@ -164,8 +172,19 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
                     className="absolute -top-1 -right-1 p-1 rounded-full bg-warning text-warm-cream shadow-elevation-sm"
                     title="Away"
                     aria-label="Away"
+                    data-testid="partner-away-indicator"
                   >
                     <Moon className="w-3.5 h-3.5" />
+                  </span>
+                )}
+                {isUnverified && (
+                  <span
+                    className="absolute -top-1 -right-1 p-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 shadow-elevation-sm"
+                    title="Presence unverified"
+                    aria-label="Presence unverified"
+                    data-testid="partner-unverified-indicator"
+                  >
+                    <WifiOff className="w-3.5 h-3.5" />
                   </span>
                 )}
               </div>
@@ -199,12 +218,12 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
           )}
         </div>
 
-        {/* 3. ARE WE CONNECTED? Unambiguous Truthful Presence Statement */}
+        {/* 3. ARE WE CONNECTED? Specific semantic states prioritized before generic online state */}
         <div className="mt-6 flex items-center justify-center gap-2 text-xs sm:text-sm font-sans text-center">
-          {isOnline ? (
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand/10 border border-brand/20 text-warm-cream font-medium">
-              <span className="w-2 h-2 rounded-full bg-brand animate-pulse motion-reduce:animate-none" />
-              <span>{partner?.displayName || "Partner"} is here in your sanctuary</span>
+          {isUnverified ? (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-200 font-medium">
+              <WifiOff className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
+              <span>Live presence unverified · Sync paused</span>
             </div>
           ) : isInGame ? (
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand/10 border border-brand/20 text-warm-cream font-medium">
@@ -215,6 +234,11 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-info/10 border border-info/20 text-warm-cream font-medium">
               <Phone className="w-3.5 h-3.5 text-info" />
               <span>Voice connection active with {partner?.displayName || "Partner"}</span>
+            </div>
+          ) : isOnline ? (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand/10 border border-brand/20 text-warm-cream font-medium">
+              <span className="w-2 h-2 rounded-full bg-brand animate-pulse motion-reduce:animate-none" />
+              <span>{partner?.displayName || "Partner"} is here in your sanctuary</span>
             </div>
           ) : isAway ? (
             <div className="inline-flex items-center gap-2 text-soft-stone">
@@ -247,15 +271,27 @@ export const HomePresenceHero: React.FC<HomePresenceHeroProps> = ({
 
         {partner ? (
           <Link
-            href={isInGame ? "/play" : isInCall ? "/play" : isOnline ? "/play" : "/moments"}
+            href={
+              isUnverified
+                ? "/moments"
+                : isInGame
+                ? "/play"
+                : isInCall
+                ? "/play"
+                : isOnline
+                ? "/play"
+                : "/moments"
+            }
             className={
-              isOnline || isInGame || isInCall
+              !isUnverified && (isOnline || isInGame || isInCall)
                 ? "self-start sm:self-auto px-5 py-2.5 rounded-xl bg-brand text-text-on-mint font-semibold text-xs transition-all hover:bg-brand-hover active:scale-95 shadow-sm inline-flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-brand cursor-pointer"
                 : "self-start sm:self-auto px-5 py-2.5 rounded-xl bg-surface-charcoal border border-border-strong text-warm-cream hover:bg-surface-raised font-semibold text-xs transition-all active:scale-95 inline-flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-brand cursor-pointer"
             }
           >
             <span>
-              {isInGame
+              {isUnverified
+                ? `Leave a Whisper for ${partner.displayName}`
+                : isInGame
                 ? "Rejoin Game Session"
                 : isInCall
                 ? "Join Voice Link"
